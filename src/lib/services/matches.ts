@@ -15,6 +15,7 @@ import {
 import { validateScore, type ScoreSet } from '@/lib/domain/scoring'
 import type { MatchSlot } from '@/lib/domain/types'
 import { lockTournamentForWrite, type TournamentTransaction } from '@/lib/services/tournaments'
+import { replanPendingMatches } from '@/lib/services/scheduling'
 
 export interface RecordResultInput {
   matchId: string
@@ -282,7 +283,7 @@ export async function startMatch(matchId: string, version: number): Promise<Matc
 }
 
 export async function recordResult(input: RecordResultInput): Promise<Match> {
-  return db.transaction(async (tx) => {
+  const { updated, tournamentId } = await db.transaction(async (tx) => {
     const context = await lockedMatchContext(tx, input.matchId)
     assertActiveTournament(context)
     assertPlayable(context.match)
@@ -291,8 +292,11 @@ export async function recordResult(input: RecordResultInput): Promise<Match> {
     if (!validation.ok) throw new Error(validation.message)
     const slots = await lockedSlots(tx, input.matchId)
     const { winnerTeamId, loserTeamId, winningSlot } = winnerAndLoser(slots, validation.winner)
-    return finishMatch(tx, context, winnerTeamId, loserTeamId, winningSlot, input.sets, null)
+    const result = await finishMatch(tx, context, winnerTeamId, loserTeamId, winningSlot, input.sets, null)
+    return { updated: result, tournamentId: context.tournament.id }
   })
+  await replanPendingMatches(tournamentId, new Date())
+  return updated
 }
 
 function forfeitScore(format: Match['format'], homeTeamId: string, loserTeamId: string): ScoreSet[] {
@@ -302,7 +306,7 @@ function forfeitScore(format: Match['format'], homeTeamId: string, loserTeamId: 
 }
 
 export async function recordForfeit(input: ForfeitInput): Promise<Match> {
-  return db.transaction(async (tx) => {
+  const { updated, tournamentId } = await db.transaction(async (tx) => {
     const context = await lockedMatchContext(tx, input.matchId)
     assertActiveTournament(context)
     assertPlayable(context.match)
@@ -314,7 +318,7 @@ export async function recordForfeit(input: ForfeitInput): Promise<Match> {
       throw new Error('El equipo que pierde no pertenece al partido')
     }
     const winnerTeamId = input.forfeitTeamId === home.teamId ? away.teamId! : home.teamId!
-    return finishMatch(
+    const result = await finishMatch(
       tx,
       context,
       winnerTeamId,
@@ -323,7 +327,10 @@ export async function recordForfeit(input: ForfeitInput): Promise<Match> {
       forfeitScore(context.match.format, home.teamId!, input.forfeitTeamId),
       input.reason,
     )
+    return { updated: result, tournamentId: context.tournament.id }
   })
+  await replanPendingMatches(tournamentId, new Date())
+  return updated
 }
 
 async function dependentMatchIds(tx: MatchDatabase, categoryId: string, sourceMatchId: string): Promise<Set<string>> {
@@ -406,7 +413,7 @@ async function clearDownstreamRoutes(tx: MatchDatabase, categoryId: string, sour
 }
 
 export async function clearResult(matchId: string, version: number): Promise<void> {
-  await db.transaction(async (tx) => {
+  const tournamentId = await db.transaction(async (tx) => {
     const context = await lockedMatchContext(tx, matchId)
     if (context.match.state !== 'completed' && context.match.state !== 'forfeit') {
       throw new Error('El partido no tiene un resultado para corregir')
@@ -442,7 +449,9 @@ export async function clearResult(matchId: string, version: number): Promise<voi
         .set({ state: 'in_progress', version: sql<number>`${tournaments.version} + 1`, updatedAt: new Date() })
         .where(and(eq(tournaments.id, context.tournament.id), eq(tournaments.state, 'finished')))
     }
+    return context.tournament.id
   })
+  await replanPendingMatches(tournamentId, new Date())
 }
 
 function assertSubstitutionGender(category: CategoryRow['category'], members: readonly { gender: string }[]): void {

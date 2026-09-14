@@ -224,7 +224,7 @@ describe('match operations', () => {
 
     await expect(clearResult(grandFinal.id, completedGrandFinal.version)).resolves.toBeUndefined()
     await expect(match('grand-final-reset')).resolves.toMatchObject({ state: 'cancelled', resultReason: 'conditional-reset' })
-    await expect(match('grand-final')).resolves.toMatchObject({ state: 'pending', resultReason: null })
+    await expect(match('grand-final')).resolves.toMatchObject({ state: 'scheduled', resultReason: null })
     expect(activatedReset.version).toBeGreaterThan(1)
   })
 

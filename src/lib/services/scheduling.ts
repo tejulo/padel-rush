@@ -77,6 +77,8 @@ function fixedInterval(match: Match, shortMinutes: number, longMinutes: number):
 
 export async function replanPendingMatches(tournamentId: string, from: Date): Promise<void> {
   const { tournament, tournamentCourts, matchRows, slotRows, memberRows } = await loadTournamentGraph(tournamentId)
+  if (!tournamentCourts.some((court) => court.enabled)) return
+  if (!matchRows.some((match) => OPEN_STATES.includes(match.state))) return
   const { teams, participants } = indexSlots(slotRows, memberRows)
 
   const dependentCounts = new Map<string, number>()

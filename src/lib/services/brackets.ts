@@ -14,6 +14,7 @@ import {
 import { validateCategoryTeams, type PairingParticipant, type TeamProposal } from '@/lib/domain/pairing'
 import { buildBracket, type BracketMatch } from '@/lib/domain/bracket'
 import { lockTournamentForWrite, type TournamentTransaction } from '@/lib/services/tournaments'
+import { replanPendingMatches } from '@/lib/services/scheduling'
 
 type TeamDatabase = TournamentTransaction
 
@@ -149,4 +150,6 @@ export async function createBrackets(tournamentId: string): Promise<void> {
       })
       .where(and(eq(tournaments.id, tournament.id), eq(tournaments.version, tournament.version)))
   })
+
+  await replanPendingMatches(tournamentId, new Date())
 }
