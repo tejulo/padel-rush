@@ -1,10 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
-import { categories, courts, matches, participants, registrations, tournaments, users, type Court, type Match } from '@/lib/db/schema'
+import {
+  categories,
+  courts,
+  matches,
+  participants,
+  registrations,
+  tournaments,
+  users,
+  type Court,
+  type Match,
+} from '@/lib/db/schema'
 import { resetDatabase } from '@/lib/test/database'
 import { makeTournamentInput } from '@/lib/test/factories'
 import { createBrackets } from '@/lib/services/brackets'
+import { recordResult } from '@/lib/services/matches'
 import { assertManualSchedule, replanPendingMatches } from '@/lib/services/scheduling'
 import { cancelCategory, lockTeams, saveTeams } from '@/lib/services/teams'
 import { createTournament, updateTournament } from '@/lib/services/tournaments'
@@ -48,6 +59,21 @@ function simpleCategory(category: CategoryName): SeedCategory {
       { name: `${category} pareja 1`, participants: participants.slice(0, 2) },
       { name: `${category} pareja 2`, participants: participants.slice(2, 4) },
     ],
+  }
+}
+
+function fourTeamCategory(category: CategoryName): SeedCategory {
+  const participants: SeedParticipant[] = Array.from({ length: 8 }, (_, index): SeedParticipant => ({
+    id: `${category}-participant-${index + 1}`,
+    name: `${category} ${index + 1}`,
+    gender: category === 'women' ? 'woman' : 'man',
+  }))
+  return {
+    category,
+    teams: Array.from({ length: 4 }, (_, index) => ({
+      name: `${category} pareja ${index + 1}`,
+      participants: participants.slice(index * 2, index * 2 + 2),
+    })),
   }
 }
 
@@ -217,23 +243,47 @@ describe('scheduling service', () => {
     for (const match of openMatches) expect(match.courtId).not.toBe(uncoveredCourt.id)
   })
 
-  it('prioritizes a match that became ready earlier than a later one', async () => {
-    const categoryIds = await seedTournament([simpleCategory('men'), simpleCategory('women')])
+  it('prioritizes the dependent final whose source finished earlier', async () => {
+    const categoryIds = await seedTournament([fourTeamCategory('men'), fourTeamCategory('women')])
+    await db.update(courts).set({ enabled: false }).where(eq(courts.position, 2))
+    await db.update(courts).set({ enabled: false }).where(eq(courts.position, 3))
     await createBrackets(tournamentId)
 
-    const menMatch = await matchByStage(categoryIds.get('men')!, 'winners-final')
-    const womenMatch = await matchByStage(categoryIds.get('women')!, 'winners-final')
-    const early = new Date('2026-10-04T09:00:00.000Z')
-    const late = new Date('2026-10-04T11:00:00.000Z')
-    await db.update(matches).set({ scheduledEndAt: early, scheduledStartAt: new Date('2026-10-04T08:20:00.000Z') }).where(eq(matches.id, menMatch.id))
-    await db.update(matches).set({ scheduledEndAt: late, scheduledStartAt: new Date('2026-10-04T10:20:00.000Z') }).where(eq(matches.id, womenMatch.id))
+    const roundOne = async (category: CategoryName) =>
+      db
+        .select()
+        .from(matches)
+        .where(and(eq(matches.categoryId, categoryIds.get(category)!), eq(matches.stage, 'winners-round'), eq(matches.round, 1)))
+        .orderBy(asc(matches.position))
 
-    const replanFrom = new Date('2026-10-04T12:00:00.000Z')
-    await replanPendingMatches(tournamentId, replanFrom)
+    for (const [category, end] of [
+      ['women', '2026-10-04T08:40:00.000Z'],
+      ['men', '2026-10-04T10:40:00.000Z'],
+    ] as const) {
+      for (const row of await roundOne(category)) {
+        await recordResult({ matchId: row.id, version: row.version, sets: [{ home: 9, away: 7 }] })
+        await db.update(matches).set({ actualEndAt: new Date(end) }).where(eq(matches.id, row.id))
+      }
+    }
 
-    const men = await matchById(menMatch.id)
-    const women = await matchById(womenMatch.id)
-    expect(men.scheduledStartAt!.getTime()).toBeLessThanOrEqual(women.scheduledStartAt!.getTime())
+    const menFinal = await matchByStage(categoryIds.get('men')!, 'winners-final')
+    const womenFinal = await matchByStage(categoryIds.get('women')!, 'winners-final')
+    await db
+      .update(matches)
+      .set({ state: 'scheduled', courtId: null, scheduledStartAt: null, scheduledEndAt: null })
+      .where(and(eq(matches.categoryId, categoryIds.get('men')!), eq(matches.stage, 'winners-final')))
+    await db
+      .update(matches)
+      .set({ state: 'scheduled', courtId: null, scheduledStartAt: null, scheduledEndAt: null })
+      .where(and(eq(matches.categoryId, categoryIds.get('women')!), eq(matches.stage, 'winners-final')))
+
+    await replanPendingMatches(tournamentId, new Date('2026-10-04T07:00:00.000Z'))
+
+    const men = await matchById(menFinal.id)
+    const women = await matchById(womenFinal.id)
+    expect(men.state).toBe('scheduled')
+    expect(women.state).toBe('scheduled')
+    expect(women.scheduledStartAt!.getTime()).toBeLessThan(men.scheduledStartAt!.getTime())
   })
 
   it('blocks a delayed in-progress match until its real duration is covered', async () => {

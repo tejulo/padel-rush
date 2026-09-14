@@ -65,7 +65,6 @@ async function loadTournamentGraph(database: SchedulingDatabase, tournamentId: s
           matchId: matchSlots.matchId,
           teamId: matchSlots.teamId,
           sourceMatchId: matchSlots.sourceMatchId,
-          sourceOutcome: matchSlots.sourceOutcome,
         })
         .from(matchSlots)
         .where(inArray(matchSlots.matchId, matchIds))
@@ -79,7 +78,7 @@ async function loadTournamentGraph(database: SchedulingDatabase, tournamentId: s
   return { tournament, tournamentCourts, matchRows, slotRows, memberRows }
 }
 
-type SlotRow = { matchId: string; teamId: string | null; sourceMatchId: string | null; sourceOutcome: string | null }
+type SlotRow = { matchId: string; teamId: string | null; sourceMatchId: string | null }
 type MemberRow = { teamId: string; participantId: string }
 
 function indexSlots(slotRows: readonly SlotRow[], memberRows: readonly MemberRow[]) {
