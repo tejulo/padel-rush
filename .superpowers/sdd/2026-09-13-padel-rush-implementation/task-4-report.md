@@ -75,3 +75,33 @@ Fix commit: `81fc17a7930aab576921f5fe5185254d518433bb` (`fix: harden tournament 
 
 - Minor default duplication and timezone-format validation remain deferred as instructed.
 - Browser E2E coverage remains outside this fix.
+
+## Scoped Re-review Fix Report
+
+### Commit
+
+Fix commit: `9c9b293d9895d83f959e0eed829d052a4c7cc1b1` (`fix: assign tournaments to organizers`).
+
+### Findings Addressed
+
+- Added `listActiveOrganizers`, which requires the administrator role and returns only active organizer accounts.
+- The new-tournament page loads that list only for administrators; organizers receive no ownership selector and are assigned from the authenticated session.
+- The compact Spanish form exposes a labeled, required organizer selector to administrators.
+- `createTournamentAction` accepts the posted organizer only for administrators, requires a selection, and otherwise always uses the authenticated organizer ID. The service still rejects admin IDs through its organizer-role invariant.
+- Added action-level integration coverage for admin assignment, inactive-organizer filtering, missing selection, and forged organizer IDs from organizer sessions.
+
+### Verification
+
+| Command | Result |
+| --- | --- |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test -- tests/integration/tournaments.test.ts` | Passed: 1 test file, 9 tests. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test -- tests/unit/validation.test.ts tests/integration/participants.test.ts tests/integration/tournaments.test.ts` | Passed: 3 test files, 17 tests. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test` | Passed: 8 test files, 34 tests. |
+| `npm run lint` | Passed with no errors or warnings. |
+| `npm run build` | Passed: Next.js production build and TypeScript checks completed successfully. |
+| `git diff --cached --check` | Passed with no whitespace errors. |
+| `git commit -m "fix: assign tournaments to organizers"` | Passed: created commit `9c9b293d9895d83f959e0eed829d052a4c7cc1b1`. |
+
+### Remaining Concerns
+
+- Minor default duplication and timezone-format validation remain deferred as instructed.
