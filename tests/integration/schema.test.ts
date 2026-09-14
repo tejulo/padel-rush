@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { sql } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import { users } from '@/lib/db/schema'
 import { resetDatabase } from '@/lib/test/database'
@@ -13,7 +14,7 @@ describe('database schema', () => {
       username: 'organizador1',
       passwordHash: 'test-hash',
       role: 'organizer',
-      active: true,
+      state: 'active',
     })
     const tournament = await createTournament({
       name: 'Sabado de padel',
@@ -29,5 +30,15 @@ describe('database schema', () => {
 
     expect(tournament.courts).toHaveLength(3)
     expect(tournament.courts.filter((court) => court.covered)).toHaveLength(2)
+  })
+
+  it('uses state as the only user status column', async () => {
+    const result = await db.execute<{ column_name: string }>(sql`
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public' and table_name = 'users'
+    `)
+
+    expect(result.rows.map((column) => column.column_name)).not.toContain('active')
   })
 })

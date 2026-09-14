@@ -54,7 +54,6 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     role: userRoleEnum('role').notNull(),
     state: userStateEnum('state').notNull().default('active'),
-    active: boolean('active').notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
