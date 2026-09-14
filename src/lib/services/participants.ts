@@ -5,11 +5,11 @@ import {
   categories,
   participants,
   registrations,
-  tournaments,
   type Participant,
 } from '@/lib/db/schema'
 import { validateParticipant } from '@/lib/domain/validation'
 import type { Category, Gender } from '@/lib/domain/types'
+import { lockTournamentForWrite, type TournamentTransaction } from '@/lib/services/tournaments'
 
 export interface CreateParticipantInput {
   tournamentId: string
@@ -35,16 +35,9 @@ function assertValidParticipant(input: Omit<CreateParticipantInput, 'tournamentI
   if (!result.ok) throw new Error(result.message)
 }
 
-async function getEditableTournament(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], tournamentId: string) {
-  const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1)
-  if (!tournament) throw new Error('Torneo no encontrado')
+async function getEditableTournament(tx: TournamentTransaction, tournamentId: string) {
+  const { tournament, tournamentCategories } = await lockTournamentForWrite(tx, tournamentId)
   if (tournament.state !== 'draft') throw new Error('El torneo no admite cambios')
-
-  const tournamentCategories = await tx
-    .select()
-    .from(categories)
-    .where(eq(categories.tournamentId, tournamentId))
-    .orderBy(asc(categories.category))
   if (tournamentCategories.some((category) => category.state !== 'draft')) {
     throw new Error('El torneo no admite cambios')
   }
@@ -62,7 +55,7 @@ function categoryIds(
 }
 
 async function writeRegistrations(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: TournamentTransaction,
   participantId: string,
   requested: Category[],
   available: typeof categories.$inferSelect[],

@@ -9,6 +9,7 @@ export const tournamentDefaults = {
   shortMatchMinutes: 40,
   longMatchMinutes: 90,
   restMinutes: 20,
+  enabledCourtCount: 3,
 } as const
 
 export interface CreateTournamentInput {
@@ -39,6 +40,28 @@ export interface UpdateTournamentInput {
 }
 
 export type TournamentWithCourts = Tournament & { courts: Court[] }
+export type TournamentTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
+type ResolvedTournamentInput = Omit<
+  CreateTournamentInput,
+  'endsAt' | 'shortMatchMinutes' | 'longMatchMinutes' | 'restMinutes' | 'enabledCourtCount'
+> & {
+  endsAt: string
+  shortMatchMinutes: number
+  longMatchMinutes: number
+  restMinutes: number
+  enabledCourtCount: 2 | 3
+}
+
+function resolveTournamentInput(input: CreateTournamentInput): ResolvedTournamentInput {
+  return {
+    ...input,
+    endsAt: input.endsAt ?? tournamentDefaults.endsAt,
+    shortMatchMinutes: input.shortMatchMinutes ?? tournamentDefaults.shortMatchMinutes,
+    longMatchMinutes: input.longMatchMinutes ?? tournamentDefaults.longMatchMinutes,
+    restMinutes: input.restMinutes ?? tournamentDefaults.restMinutes,
+    enabledCourtCount: input.enabledCourtCount ?? tournamentDefaults.enabledCourtCount,
+  }
+}
 
 function assertTournamentInput(input: CreateTournamentInput): void {
   if (!input.name.trim()) throw new Error('El nombre del torneo es obligatorio')
@@ -93,6 +116,25 @@ export function assertTournamentOwner(user: Pick<SessionUser, 'id' | 'role'>, to
   }
 }
 
+export async function lockTournamentForWrite(tx: TournamentTransaction, tournamentId: string) {
+  const [tournament] = await tx
+    .select()
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId))
+    .for('update')
+    .limit(1)
+  if (!tournament) throw new Error('Torneo no encontrado')
+
+  const tournamentCategories = await tx
+    .select()
+    .from(categories)
+    .where(eq(categories.tournamentId, tournamentId))
+    .orderBy(asc(categories.category))
+    .for('update')
+
+  return { tournament, tournamentCategories }
+}
+
 export async function getTournament(id: string): Promise<TournamentWithCourts | null> {
   const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id)).limit(1)
   if (!tournament) return null
@@ -122,18 +164,14 @@ export async function getCategories(tournamentId: string) {
 }
 
 export async function createTournament(input: CreateTournamentInput): Promise<TournamentWithCourts> {
-  assertTournamentInput(input)
-  const endsAt = input.endsAt ?? tournamentDefaults.endsAt
-  const shortMatchMinutes = input.shortMatchMinutes ?? tournamentDefaults.shortMatchMinutes
-  const longMatchMinutes = input.longMatchMinutes ?? tournamentDefaults.longMatchMinutes
-  const restMinutes = input.restMinutes ?? tournamentDefaults.restMinutes
-  const enabledCourtCount = input.enabledCourtCount ?? 3
+  const resolved = resolveTournamentInput(input)
+  assertTournamentInput(resolved)
 
   return db.transaction(async (tx) => {
     const [organizer] = await tx
       .select({ id: users.id })
       .from(users)
-      .where(and(eq(users.id, input.organizerId), eq(users.state, 'active')))
+      .where(and(eq(users.id, resolved.organizerId), eq(users.role, 'organizer'), eq(users.state, 'active')))
       .limit(1)
     if (!organizer) throw new Error('Organizador no encontrado')
 
@@ -141,15 +179,15 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
       .insert(tournaments)
       .values({
         id: randomUUID(),
-        name: input.name.trim(),
-        date: input.date,
-        timezone: input.timezone,
-        startsAt: input.startsAt,
-        endsAt,
-        shortMatchMinutes,
-        longMatchMinutes,
-        restMinutes,
-        organizerId: input.organizerId,
+        name: resolved.name.trim(),
+        date: resolved.date,
+        timezone: resolved.timezone,
+        startsAt: resolved.startsAt,
+        endsAt: resolved.endsAt,
+        shortMatchMinutes: resolved.shortMatchMinutes,
+        longMatchMinutes: resolved.longMatchMinutes,
+        restMinutes: resolved.restMinutes,
+        organizerId: resolved.organizerId,
       })
       .returning()
 
@@ -164,7 +202,7 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
           name: 'Cancha 3',
           position: 3,
           covered: false,
-          enabled: enabledCourtCount === 3,
+          enabled: resolved.enabledCourtCount === 3,
         },
       ])
       .returning()

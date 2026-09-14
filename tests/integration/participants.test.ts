@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
-import { categories, users } from '@/lib/db/schema'
+import { categories, tournaments, users } from '@/lib/db/schema'
 import { resetDatabase } from '@/lib/test/database'
 import { makeTournamentInput } from '@/lib/test/factories'
 import { createParticipant, replaceRegistrations } from '@/lib/services/participants'
@@ -69,5 +69,52 @@ describe('participant registrations', () => {
     await expect(replaceRegistrations(participant.id, ['women'], participant.version)).rejects.toThrow(
       'El torneo no admite cambios',
     )
+  })
+
+  it('waits for an in-flight tournament lock before checking category state', async () => {
+    let releaseLock!: () => void
+    let signalTournamentLock!: () => void
+    const release = new Promise<void>((resolve) => {
+      releaseLock = resolve
+    })
+    const tournamentLocked = new Promise<void>((resolve) => {
+      signalTournamentLock = resolve
+    })
+
+    const lockTransaction = db.transaction(async (tx) => {
+      await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId)).for('update')
+      signalTournamentLock()
+      await release
+      await tx
+        .select()
+        .from(categories)
+        .where(and(eq(categories.tournamentId, tournamentId), eq(categories.category, 'women')))
+        .for('update')
+      await tx
+        .update(categories)
+        .set({ state: 'locked' })
+        .where(and(eq(categories.tournamentId, tournamentId), eq(categories.category, 'women')))
+    })
+
+    await tournamentLocked
+    const write = createParticipant({
+      tournamentId,
+      name: 'Ana',
+      gender: 'woman',
+      level: 4,
+      categories: ['women'],
+    }).then(
+      () => 'created',
+      (error: unknown) => (error instanceof Error ? error.message : 'failed'),
+    )
+
+    const beforeRelease = await Promise.race([
+      write,
+      new Promise<'pending'>((resolve) => setImmediate(() => resolve('pending'))),
+    ])
+    expect(beforeRelease).toBe('pending')
+    releaseLock()
+    await lockTransaction
+    await expect(write).resolves.toBe('El torneo no admite cambios')
   })
 })

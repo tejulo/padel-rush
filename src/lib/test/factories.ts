@@ -1,6 +1,6 @@
 import type { CreateTournamentInput } from '@/lib/services/tournaments'
 
-export function makeTournamentInput(): CreateTournamentInput {
+export function makeTournamentInput(overrides: Partial<CreateTournamentInput> = {}): CreateTournamentInput {
   return {
     name: 'Sabado de padel',
     date: '2026-10-03',
@@ -11,5 +11,6 @@ export function makeTournamentInput(): CreateTournamentInput {
     longMatchMinutes: 90,
     restMinutes: 20,
     organizerId: 'organizer-id',
+    ...overrides,
   }
 }
