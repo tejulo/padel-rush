@@ -1,18 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/auth/guards', () => ({ requireRole: vi.fn(), requireUser: vi.fn() }))
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
+vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
+
 import { db } from '@/lib/db/client'
 import { resetDatabase } from '@/lib/test/database'
 import { makeTournamentInput } from '@/lib/test/factories'
 import { users } from '@/lib/db/schema'
+import { requireRole, requireUser } from '@/lib/auth/guards'
+import { createTournamentAction } from '@/app/actions/tournaments'
 import {
   assertTournamentOwner,
   createTournament,
   getTournament,
+  listActiveOrganizers,
   listTournaments,
   updateTournament,
 } from '@/lib/services/tournaments'
 
 describe('tournament management', () => {
   beforeEach(async () => {
+    vi.clearAllMocks()
     await db.insert(users).values([
       {
         id: 'organizer-id',
@@ -34,6 +43,13 @@ describe('tournament management', () => {
         passwordHash: 'test-hash',
         role: 'admin',
         state: 'active',
+      },
+      {
+        id: 'inactive-organizer-id',
+        username: 'organizador-inactivo',
+        passwordHash: 'test-hash',
+        role: 'organizer',
+        state: 'inactive',
       },
     ])
   })
@@ -105,5 +121,62 @@ describe('tournament management', () => {
       enabledCourtCount: 3,
     })
     expect(threeCourts.courts.map((court) => court.enabled)).toEqual([true, true, true])
+  })
+
+  it('lets an admin assign a new tournament to a selected active organizer', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ id: 'admin-id', username: 'admin1', role: 'admin' })
+    vi.mocked(requireRole).mockResolvedValue({ id: 'admin-id', username: 'admin1', role: 'admin' })
+    const activeOrganizers = await listActiveOrganizers()
+    expect(activeOrganizers.map((organizer) => organizer.id)).toEqual(['organizer-id', 'other-organizer-id'])
+
+    const formData = new FormData()
+    formData.set('name', 'Torneo administrado')
+    formData.set('date', '2026-10-03')
+    formData.set('timezone', 'America/Argentina/Buenos_Aires')
+    formData.set('startsAt', '09:00')
+    formData.set('endsAt', '21:00')
+    formData.set('shortMatchMinutes', '40')
+    formData.set('longMatchMinutes', '90')
+    formData.set('restMinutes', '20')
+    formData.set('enabledCourtCount', '2')
+    formData.set('organizerId', 'other-organizer-id')
+
+    await createTournamentAction({}, formData)
+
+    const created = await listTournaments({ id: 'admin-id', role: 'admin' })
+    expect(created).toHaveLength(1)
+    expect(created[0]?.organizerId).toBe('other-organizer-id')
+    expect(created[0]?.organizerId).not.toBe('admin-id')
+  })
+
+  it('returns a clear error when an admin omits the organizer', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ id: 'admin-id', username: 'admin1', role: 'admin' })
+    const formData = new FormData()
+    formData.set('name', 'Torneo sin organizador')
+
+    await expect(createTournamentAction({}, formData)).resolves.toEqual({
+      error: 'Selecciona un organizador activo',
+    })
+  })
+
+  it('uses the authenticated organizer despite a posted organizer id', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ id: 'organizer-id', username: 'organizador1', role: 'organizer' })
+    const formData = new FormData()
+    formData.set('name', 'Torneo propio')
+    formData.set('date', '2026-10-03')
+    formData.set('timezone', 'America/Argentina/Buenos_Aires')
+    formData.set('startsAt', '09:00')
+    formData.set('endsAt', '21:00')
+    formData.set('shortMatchMinutes', '40')
+    formData.set('longMatchMinutes', '90')
+    formData.set('restMinutes', '20')
+    formData.set('enabledCourtCount', '2')
+    formData.set('organizerId', 'other-organizer-id')
+
+    await createTournamentAction({}, formData)
+
+    const created = await listTournaments({ id: 'admin-id', role: 'admin' })
+    expect(created).toHaveLength(1)
+    expect(created[0]?.organizerId).toBe('organizer-id')
   })
 })

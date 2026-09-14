@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, lte } from 'drizzle-orm'
+import { requireRole } from '@/lib/auth/guards'
 import type { SessionUser } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { categories, courts, tournaments, users, type Court, type Tournament } from '@/lib/db/schema'
@@ -41,6 +42,7 @@ export interface UpdateTournamentInput {
 
 export type TournamentWithCourts = Tournament & { courts: Court[] }
 export type TournamentTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
+export type ActiveOrganizer = Pick<typeof users.$inferSelect, 'id' | 'username'>
 type ResolvedTournamentInput = Omit<
   CreateTournamentInput,
   'endsAt' | 'shortMatchMinutes' | 'longMatchMinutes' | 'restMinutes' | 'enabledCourtCount'
@@ -153,6 +155,15 @@ export async function listTournaments(user: Pick<SessionUser, 'id' | 'role'>): P
   return user.role === 'admin'
     ? query.orderBy(asc(tournaments.date), asc(tournaments.startsAt))
     : query.where(eq(tournaments.organizerId, user.id)).orderBy(asc(tournaments.date), asc(tournaments.startsAt))
+}
+
+export async function listActiveOrganizers(): Promise<ActiveOrganizer[]> {
+  await requireRole('admin')
+  return db
+    .select({ id: users.id, username: users.username })
+    .from(users)
+    .where(and(eq(users.role, 'organizer'), eq(users.state, 'active')))
+    .orderBy(asc(users.username))
 }
 
 export async function getCategories(tournamentId: string) {

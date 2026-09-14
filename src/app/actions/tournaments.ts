@@ -52,9 +52,11 @@ function tournamentInput(formData: FormData, organizerId: string): CreateTournam
 
 export async function createTournamentAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireUser()
+  const organizerId = user.role === 'admin' ? value(formData, 'organizerId') : user.id
+  if (user.role === 'admin' && !organizerId) return { error: 'Selecciona un organizador activo' }
   let tournament
   try {
-    tournament = await createTournament(tournamentInput(formData, user.id))
+    tournament = await createTournament(tournamentInput(formData, organizerId))
   } catch (error) {
     return errorState(error)
   }

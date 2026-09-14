@@ -1,12 +1,20 @@
 'use client'
 
 import { useActionState } from 'react'
-import type { TournamentWithCourts } from '@/lib/services/tournaments'
+import type { ActiveOrganizer, TournamentWithCourts } from '@/lib/services/tournaments'
 import { createTournamentAction, updateTournamentAction, type ActionState } from '@/app/actions/tournaments'
 
 const initialState: ActionState = {}
 
-export function TournamentForm({ tournament }: { tournament?: TournamentWithCourts }) {
+export function TournamentForm({
+  tournament,
+  isAdmin = false,
+  organizers = [],
+}: {
+  tournament?: TournamentWithCourts
+  isAdmin?: boolean
+  organizers?: ActiveOrganizer[]
+}) {
   const action = tournament ? updateTournamentAction : createTournamentAction
   const [state, formAction, pending] = useActionState(action, initialState)
   const enabledCourtCount = tournament?.courts.filter((court) => court.enabled).length === 2 ? 2 : 3
@@ -19,6 +27,19 @@ export function TournamentForm({ tournament }: { tournament?: TournamentWithCour
           <input type="hidden" name="id" value={tournament.id} />
           <input type="hidden" name="version" value={tournament.version} />
         </>
+      ) : null}
+      {!tournament && isAdmin ? (
+        <label htmlFor="organizerId">
+          Organizador
+          <select id="organizerId" name="organizerId" required defaultValue="">
+            <option value="">Selecciona un organizador activo</option>
+            {organizers.map((organizer) => (
+              <option key={organizer.id} value={organizer.id}>
+                {organizer.username}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : null}
       <label>
         Nombre
