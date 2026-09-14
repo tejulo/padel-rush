@@ -57,7 +57,10 @@ export const users = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [uniqueIndex('users_username_unique').on(table.username)],
+  (table) => [
+    uniqueIndex('users_username_unique').on(table.username),
+    uniqueIndex('users_single_admin_unique').on(table.role).where(sql`${table.role} = 'admin'`),
+  ],
 )
 
 export const sessions = pgTable(

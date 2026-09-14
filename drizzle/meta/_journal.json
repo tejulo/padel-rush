@@ -15,6 +15,13 @@
       "when": 1789390954152,
       "tag": "0001_remove_active_user_status",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789394700869,
+      "tag": "0002_ancient_silk_fever",
+      "breakpoints": true
     }
   ]
 }

@@ -17,28 +17,35 @@ function assertPassword(password: string): void {
 }
 
 export async function bootstrapAdmin() {
-  const [existingAdmin] = await db.select().from(users).where(eq(users.role, 'admin')).limit(1)
-  if (existingAdmin) return existingAdmin
+  return db.transaction(async (tx) => {
+    const [existingAdmin] = await tx.select().from(users).where(eq(users.role, 'admin')).limit(1)
+    if (existingAdmin) return existingAdmin
 
-  const username = process.env.BOOTSTRAP_ADMIN_USERNAME
-  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD
-  if (!username || !password || !/^[A-Za-z0-9]{3,32}$/.test(username)) {
-    throw new Error('Faltan credenciales validas para el administrador inicial')
-  }
-  assertPassword(password)
+    const username = process.env.BOOTSTRAP_ADMIN_USERNAME
+    const password = process.env.BOOTSTRAP_ADMIN_PASSWORD
+    if (!username || !password || !/^[A-Za-z0-9]{3,32}$/.test(username)) {
+      throw new Error('Faltan credenciales validas para el administrador inicial')
+    }
+    assertPassword(password)
 
-  const [admin] = await db
-    .insert(users)
-    .values({
-      id: randomUUID(),
-      username,
-      passwordHash: await hashPassword(password),
-      role: 'admin',
-      state: 'active',
-    })
-    .returning()
+    const [admin] = await tx
+      .insert(users)
+      .values({
+        id: randomUUID(),
+        username,
+        passwordHash: await hashPassword(password),
+        role: 'admin',
+        state: 'active',
+      })
+      .onConflictDoNothing()
+      .returning()
 
-  return admin
+    if (admin) return admin
+
+    const [racedAdmin] = await tx.select().from(users).where(eq(users.role, 'admin')).limit(1)
+    if (racedAdmin) return racedAdmin
+    throw new Error('No se pudo crear el administrador inicial')
+  })
 }
 
 export async function createOrganizer(input: OrganizerInput) {

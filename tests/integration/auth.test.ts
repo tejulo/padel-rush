@@ -4,9 +4,15 @@ import { db } from '@/lib/db/client'
 import { sessions, users } from '@/lib/db/schema'
 import { hashPassword } from '@/lib/auth/password'
 import { signIn } from '@/lib/auth/session'
+import { bootstrapAdmin } from '@/lib/services/users'
 import { resetDatabase } from '@/lib/test/database'
 
 const password = 'padel-seguro1'
+const bootstrapUsername = 'admininicial'
+const bootstrapPassword = 'admin-seguro1'
+
+const previousBootstrapUsername = process.env.BOOTSTRAP_ADMIN_USERNAME
+const previousBootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD
 
 beforeEach(async () => {
   await db.insert(users).values({
@@ -20,6 +26,13 @@ beforeEach(async () => {
 
 afterEach(resetDatabase)
 
+afterEach(() => {
+  if (previousBootstrapUsername === undefined) delete process.env.BOOTSTRAP_ADMIN_USERNAME
+  else process.env.BOOTSTRAP_ADMIN_USERNAME = previousBootstrapUsername
+  if (previousBootstrapPassword === undefined) delete process.env.BOOTSTRAP_ADMIN_PASSWORD
+  else process.env.BOOTSTRAP_ADMIN_PASSWORD = previousBootstrapPassword
+})
+
 describe('authentication', () => {
   it('locks a username and IP after five invalid attempts', async () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -29,12 +42,36 @@ describe('authentication', () => {
     await expect(signIn('organizador1', password, '127.0.0.1')).resolves.toMatchObject({ ok: false, reason: 'locked' })
   })
 
-  it('does not share a lock between different IP addresses', async () => {
+  it('locks a username across different IP addresses', async () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await signIn('organizador1', 'incorrecta', '127.0.0.1')
     }
 
-    await expect(signIn('organizador1', password, '127.0.0.2')).resolves.toMatchObject({ ok: true })
+    await expect(signIn('organizador1', password, '127.0.0.2')).resolves.toMatchObject({ ok: false, reason: 'locked' })
+  })
+
+  it('locks an IP across different usernames', async () => {
+    await db.insert(users).values({
+      id: 'organizer-2-id',
+      username: 'organizador2',
+      passwordHash: await hashPassword(password),
+      role: 'organizer',
+      state: 'active',
+    })
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await signIn('organizador1', 'incorrecta', '127.0.0.1')
+    }
+
+    await expect(signIn('organizador2', password, '127.0.0.1')).resolves.toMatchObject({ ok: false, reason: 'locked' })
+  })
+
+  it('locks a username when spoofed IP headers rotate', async () => {
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await signIn('organizador1', 'incorrecta', `192.0.2.${attempt}`)
+    }
+
+    await expect(signIn('organizador1', password, '192.0.2.6')).resolves.toMatchObject({ ok: false, reason: 'locked' })
   })
 
   it('stores only a hash when a session is created', async () => {
@@ -50,5 +87,16 @@ describe('authentication', () => {
     expect(session?.tokenHash).toBeTruthy()
     expect(session?.tokenHash).not.toBe(result.token)
     expect(session?.tokenHash).not.toContain(result.token)
+  })
+
+  it('returns one admin when bootstrap runs concurrently', async () => {
+    process.env.BOOTSTRAP_ADMIN_USERNAME = bootstrapUsername
+    process.env.BOOTSTRAP_ADMIN_PASSWORD = bootstrapPassword
+
+    const results = await Promise.all(Array.from({ length: 8 }, () => bootstrapAdmin()))
+    const admins = await db.select().from(users)
+
+    expect(admins.filter((user) => user.role === 'admin')).toHaveLength(1)
+    expect(results.every((result) => result.id === admins.find((user) => user.role === 'admin')?.id)).toBe(true)
   })
 })

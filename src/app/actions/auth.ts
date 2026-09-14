@@ -2,13 +2,8 @@
 
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { requestIp } from '@/lib/auth/request-ip'
 import { setSessionCookie, signIn, signOut } from '@/lib/auth/session'
-
-function requestIp(headerStore: Headers): string {
-  const forwardedFor = headerStore.get('x-forwarded-for')
-  if (forwardedFor) return forwardedFor.split(',')[0]?.trim() || 'unknown'
-  return headerStore.get('x-real-ip')?.trim() || 'unknown'
-}
 
 export async function signInAction(formData: FormData) {
   const headerStore = await headers()

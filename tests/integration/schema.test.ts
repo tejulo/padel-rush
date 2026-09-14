@@ -41,4 +41,15 @@ describe('database schema', () => {
 
     expect(result.rows.map((column) => column.column_name)).not.toContain('active')
   })
+
+  it('enforces a single administrator with a partial unique index', async () => {
+    const result = await db.execute<{ indexname: string; indexdef: string }>(sql`
+      select indexname, indexdef
+      from pg_indexes
+      where schemaname = 'public' and tablename = 'users' and indexname = 'users_single_admin_unique'
+    `)
+
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0]?.indexdef).toMatch(/unique.*role.*admin/i)
+  })
 })

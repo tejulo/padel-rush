@@ -40,3 +40,25 @@ The implementation uses Argon2id password hashes, SHA-256 hashes of random sessi
 
 - The Task 1 root page still redirects `/` to `/login`; the later panel dashboard task must replace that route so the successful `/` redirect lands on the protected dashboard.
 - The login form currently returns silently on invalid credentials; the shared `signIn` result still carries the same invalid-credentials message for all failure paths, and a later UI pass can render it with action state.
+
+## Follow-up Fix Report
+
+### Findings Addressed
+
+- Login failures now lock independently by username and IP after five recent failures in either dimension, with the existing 15-minute window.
+- Proxy IP extraction validates addresses, prefers a valid `x-real-ip`, and selects the rightmost valid `x-forwarded-for` address.
+- Bootstrap administrator creation now uses a transaction, conflict-safe insert, and race recovery so concurrent initialization returns one administrator.
+- The schema declares and migration `0002_ancient_silk_fever.sql` adds the `users_single_admin_unique` PostgreSQL partial unique index for administrator roles.
+- The root `/` redirect remains unchanged for Task 9, and invalid-login display remains deferred.
+
+### Verification
+
+| Command | Result |
+| --- | --- |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run db:migrate` | Passed before and after the fix; the second run was idempotent. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test -- tests/unit/password.test.ts tests/unit/request-ip.test.ts tests/integration/auth.test.ts tests/integration/schema.test.ts` | Passed: 4 test files, 14 tests. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test` | Passed: 5 test files, 15 tests. |
+| `npm run lint` | Passed. |
+| `npm run build` | Passed: Next.js production build and TypeScript checks completed successfully. |
+
+The direct `psql` verification command was unavailable because `psql` is not installed; the schema integration test verified the partial index through `pg_indexes`.
