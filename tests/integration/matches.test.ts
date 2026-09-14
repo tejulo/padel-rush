@@ -291,6 +291,19 @@ describe('match operations', () => {
     expect(completed).toMatchObject({ state: 'completed', winnerTeamId: teamIds[0], actualEndAt: expect.any(Date) })
   })
 
+  it('accepts a seven-five long set with a two-game margin', async () => {
+    await seedBracket()
+    const first = await match('winners-final')
+    await schedule(first.id)
+
+    const completed = await recordResult({
+      matchId: first.id,
+      version: first.version,
+      sets: [{ home: 7, away: 5 }, { home: 6, away: 4 }],
+    })
+    expect(completed).toMatchObject({ state: 'completed', winnerTeamId: teamIds[0], score: [{ home: 7, away: 5 }, { home: 6, away: 4 }] })
+  })
+
   it('rejects stale result versions and unfinished matches', async () => {
     await seedBracket()
     const first = await match('winners-final')

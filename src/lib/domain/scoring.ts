@@ -26,7 +26,7 @@ function validLongSet(set: ScoreSet): boolean {
   if (!isGameScore(set.home) || !isGameScore(set.away)) return false
   const winner = Math.max(set.home, set.away)
   const loser = Math.min(set.home, set.away)
-  return (winner === 6 && loser <= 4) || (winner === 7 && loser === 6)
+  return (winner === 6 && loser <= 4) || (winner === 7 && (loser === 5 || loser === 6))
 }
 
 export function validateScore(format: MatchFormat, sets: readonly ScoreSet[]): ScoreValidation {

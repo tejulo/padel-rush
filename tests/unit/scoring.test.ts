@@ -24,4 +24,13 @@ describe('score validation', () => {
     expect(validateScore('best-of-three', [{ home: 6, away: 5 }, { home: 6, away: 0 }]).ok).toBe(false)
     expect(validateScore('best-of-three', [{ home: 7, away: 6 }, { home: 4, away: 6 }, { home: 6, away: 2 }]).ok).toBe(true)
   })
+
+  it('accepts a two-game margin at 7-5 but rejects 7-4 and unfinished set counts', () => {
+    expect(validateScore('best-of-three', [{ home: 5, away: 7 }, { home: 6, away: 4 }, { home: 7, away: 5 }]).ok).toBe(true)
+    expect(validateScore('best-of-three', [{ home: 7, away: 5 }, { home: 7, away: 5 }]).ok).toBe(true)
+    expect(validateScore('best-of-three', [{ home: 7, away: 4 }, { home: 6, away: 0 }]).ok).toBe(false)
+    expect(validateScore('best-of-three', [{ home: 8, away: 6 }, { home: 6, away: 0 }]).ok).toBe(false)
+    expect(validateScore('best-of-three', [{ home: 7, away: 5 }]).ok).toBe(false)
+    expect(validateScore('best-of-three', [{ home: 7, away: 5 }, { home: 6, away: 4 }, { home: 0, away: 6 }]).ok).toBe(false)
+  })
 })
