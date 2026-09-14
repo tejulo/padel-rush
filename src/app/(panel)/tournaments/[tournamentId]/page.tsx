@@ -26,6 +26,9 @@ export default async function TournamentPage({ params }: { params: Promise<{ tou
       <p>
         <Link href={`/tournaments/${tournament.id}/participants`}>Participantes</Link>
       </p>
+      <p>
+        <Link href={`/tournaments/${tournament.id}/teams`}>Parejas</Link>
+      </p>
       <h2>Canchas</h2>
       <ul>
         {tournament.courts.map((court) => (
