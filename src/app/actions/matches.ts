@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/guards'
 import type { ScoreSet } from '@/lib/domain/scoring'
+import { tournamentLocalToInstant } from '@/lib/services/scheduling'
 import { assertTournamentOwner } from '@/lib/services/tournaments'
 import type { ActionState } from './tournaments'
 import {
@@ -166,7 +167,7 @@ export async function moveMatchAction(_previousState: ActionState, formData: For
       matchId,
       tournamentId: context.tournament.id,
       courtId: value(formData, 'courtId'),
-      startsAt: new Date(startsAt),
+      startsAt: tournamentLocalToInstant(context.tournament, startsAt),
     })
   } catch (error) {
     return errorState(error)

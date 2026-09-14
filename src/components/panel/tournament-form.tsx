@@ -6,14 +6,23 @@ import { createTournamentAction, updateTournamentAction, type ActionState } from
 
 const initialState: ActionState = {}
 
+export interface TournamentDefaultValues {
+  endsAt: string
+  shortMatchMinutes: number
+  longMatchMinutes: number
+  restMinutes: number
+}
+
 export function TournamentForm({
   tournament,
   isAdmin = false,
   organizers = [],
+  defaults,
 }: {
   tournament?: TournamentWithCourts
   isAdmin?: boolean
   organizers?: ActiveOrganizer[]
+  defaults?: TournamentDefaultValues
 }) {
   const action = tournament ? updateTournamentAction : createTournamentAction
   const [state, formAction, pending] = useActionState(action, initialState)
@@ -59,19 +68,40 @@ export function TournamentForm({
       </label>
       <label>
         Hora limite
-        <input name="endsAt" type="time" required defaultValue={tournament?.endsAt ?? '21:00'} disabled={locked} />
+        <input name="endsAt" type="time" required defaultValue={tournament?.endsAt ?? defaults?.endsAt ?? '21:00'} disabled={locked} />
       </label>
       <label>
         Duracion corta (minutos)
-        <input name="shortMatchMinutes" type="number" min="1" required defaultValue={tournament?.shortMatchMinutes ?? 40} disabled={locked} />
+        <input
+          name="shortMatchMinutes"
+          type="number"
+          min="1"
+          required
+          defaultValue={tournament?.shortMatchMinutes ?? defaults?.shortMatchMinutes ?? 40}
+          disabled={locked}
+        />
       </label>
       <label>
         Duracion larga (minutos)
-        <input name="longMatchMinutes" type="number" min="1" required defaultValue={tournament?.longMatchMinutes ?? 90} disabled={locked} />
+        <input
+          name="longMatchMinutes"
+          type="number"
+          min="1"
+          required
+          defaultValue={tournament?.longMatchMinutes ?? defaults?.longMatchMinutes ?? 90}
+          disabled={locked}
+        />
       </label>
       <label>
         Descanso minimo (minutos)
-        <input name="restMinutes" type="number" min="0" required defaultValue={tournament?.restMinutes ?? 20} disabled={locked} />
+        <input
+          name="restMinutes"
+          type="number"
+          min="0"
+          required
+          defaultValue={tournament?.restMinutes ?? defaults?.restMinutes ?? 20}
+          disabled={locked}
+        />
       </label>
       <fieldset>
         <legend>Canchas habilitadas</legend>

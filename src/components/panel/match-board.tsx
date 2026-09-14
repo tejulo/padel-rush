@@ -36,12 +36,16 @@ const CATEGORY_LABELS: Record<string, string> = { men: 'Masculino', women: 'Feme
 function formatTime(date: Date | string | null): string {
   if (!date) return 'sin horario'
   const value = date instanceof Date ? date : new Date(date)
-  return value.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  return value.toISOString().slice(11, 16)
 }
 
 function formatScore(score: unknown): string {
   if (!Array.isArray(score)) return ''
   return score.map((set) => `${(set as { home: number }).home}-${(set as { away: number }).away}`).join(', ')
+}
+
+function courtKey(entry: MatchBoardEntry): string {
+  return entry.courtName ?? 'Sin cancha'
 }
 
 export function MatchBoard({
@@ -54,48 +58,59 @@ export function MatchBoard({
   enabledCourts: { id: string; name: string }[]
 }) {
   const [selected, setSelected] = useState<string | null>(null)
+  if (matches.length === 0) return <p>No hay partidos generados.</p>
+
+  const groups = new Map<string, MatchBoardEntry[]>()
+  for (const entry of matches) {
+    const key = courtKey(entry)
+    groups.set(key, [...(groups.get(key) ?? []), entry])
+  }
 
   return (
-    <section>
-      {matches.length === 0 ? <p>No hay partidos generados.</p> : null}
-      <ul>
-        {matches.map((entry) => {
-          const { match } = entry
-          const canOperate = match.state === 'scheduled' || match.state === 'in_progress'
-          const isSelected = selected === match.id
-          return (
-            <li key={match.id}>
-              <p>
-                <strong>{CATEGORY_LABELS[entry.category.category]}</strong> - {STAGE_LABELS[match.stage] ?? match.stage} - ronda{' '}
-                {match.round} - {STATE_LABELS[match.state] ?? match.state}
-              </p>
-              <p>
-                {entry.homeTeam?.name ?? 'por definir'} vs {entry.awayTeam?.name ?? 'por definir'}
-              </p>
-              <p>
-                {entry.courtName ?? 'sin cancha'} - {formatTime(match.scheduledStartAt)}
-                {match.score ? ` - marcador ${formatScore(match.score)}` : ''}
-                {match.resultReason ? ` - ${match.resultReason}` : ''}
-              </p>
-              {canOperate ? (
-                <button type="button" onClick={() => setSelected(isSelected ? null : match.id)}>
-                  {isSelected ? 'Cerrar' : 'Operar partido'}
-                </button>
-              ) : null}
-              {isSelected ? (
-                <MatchOperations
-                  match={match}
-                  tournamentId={tournamentId}
-                  enabledCourts={enabledCourts}
-                  homeTeam={entry.homeTeam}
-                  awayTeam={entry.awayTeam}
-                />
-              ) : null}
-            </li>
-          )
-        })}
-      </ul>
-    </section>
+    <div>
+      {[...groups.entries()].map(([court, entries]) => (
+        <section key={court}>
+          <h2>{court}</h2>
+          <ol>
+            {entries.map((entry) => {
+              const { match } = entry
+              const canOperate = match.state === 'scheduled' || match.state === 'in_progress'
+              const canMove = match.state === 'pending' || match.state === 'scheduled'
+              const isSelected = selected === match.id
+              return (
+                <li key={match.id}>
+                  <p>
+                    {formatTime(match.scheduledStartAt)} - <strong>{CATEGORY_LABELS[entry.category.category]}</strong> -{' '}
+                    {STAGE_LABELS[match.stage] ?? match.stage} - {STATE_LABELS[match.state] ?? match.state}
+                  </p>
+                  <p>
+                    {entry.homeTeam?.name ?? 'por definir'} vs {entry.awayTeam?.name ?? 'por definir'}
+                  </p>
+                  {match.score ? <p>Marcador: {formatScore(match.score)}</p> : null}
+                  {match.resultReason && match.resultReason !== 'conditional-reset' ? (
+                    <p>{match.resultReason === 'absence' ? 'Ausencia' : 'Retiro'}</p>
+                  ) : null}
+                  {canOperate || canMove ? (
+                    <button type="button" onClick={() => setSelected(isSelected ? null : match.id)}>
+                      {isSelected ? 'Cerrar' : 'Operar partido'}
+                    </button>
+                  ) : null}
+                  {isSelected ? (
+                    <MatchOperations
+                      match={match}
+                      tournamentId={tournamentId}
+                      enabledCourts={enabledCourts}
+                      homeTeam={entry.homeTeam}
+                      awayTeam={entry.awayTeam}
+                    />
+                  ) : null}
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+      ))}
+    </div>
   )
 }
 
@@ -120,6 +135,9 @@ function MatchOperations({
   const [sets, setSets] = useState(1)
 
   const errors = [startState.error, resultState.error, forfeitState.error, clearState.error, moveState.error].filter(Boolean)
+  const successes = [startState.success, resultState.success, forfeitState.success, clearState.success, moveState.success].filter(
+    Boolean,
+  )
 
   return (
     <div>
@@ -132,76 +150,83 @@ function MatchOperations({
           </button>
         </form>
       ) : null}
-      <form action={resultAction}>
-        <input type="hidden" name="matchId" value={match.id} />
-        <input type="hidden" name="version" value={match.version} />
-        <label>
-          Sets
-          <select value={sets} onChange={(event) => setSets(Number(event.target.value))}>
-            <option value={1}>1 set</option>
-            <option value={2}>2 sets</option>
-            <option value={3}>3 sets</option>
-          </select>
-        </label>
-        {Array.from({ length: sets }, (_, index) => (
-          <fieldset key={index}>
-            <legend>Set {index + 1}</legend>
-            <label>
-              {homeTeam?.name ?? 'Local'}
-              <input name={`home-${index}`} type="number" min="0" max="9" required />
-            </label>
-            <label>
-              {awayTeam?.name ?? 'Visitante'}
-              <input name={`away-${index}`} type="number" min="0" max="9" required />
-            </label>
-          </fieldset>
-        ))}
-        <button type="submit" disabled={resultPending}>
-          {resultPending ? 'Guardando...' : 'Guardar resultado'}
-        </button>
-      </form>
-      <form action={forfeitAction}>
-        <input type="hidden" name="matchId" value={match.id} />
-        <input type="hidden" name="version" value={match.version} />
-        <label>
-          Equipo que no se presenta
-          <select name="forfeitTeamId" required>
-            <option value="">Seleccionar</option>
-            {homeTeam ? <option value={homeTeam.id}>{homeTeam.name}</option> : null}
-            {awayTeam ? <option value={awayTeam.id}>{awayTeam.name}</option> : null}
-          </select>
-        </label>
-        <label>
-          Motivo
-          <select name="reason" required>
-            <option value="absence">Ausencia</option>
-            <option value="retirement">Retiro</option>
-          </select>
-        </label>
-        <button type="submit" disabled={forfeitPending}>
-          {forfeitPending ? 'Guardando...' : 'Registrar derrota automatica'}
-        </button>
-      </form>
-      <form action={moveAction}>
-        <input type="hidden" name="matchId" value={match.id} />
-        <label>
-          Cancha
-          <select name="courtId" defaultValue={enabledCourts[0]?.id ?? ''} required>
-            {enabledCourts.map((court) => (
-              <option key={court.id} value={court.id}>
-                {court.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Nueva hora
-          <input name="startsAt" type="datetime-local" required />
-        </label>
-        <button type="submit" disabled={movePending}>
-          {movePending ? 'Moviendo...' : 'Mover partido'}
-        </button>
-      </form>
+      {match.state === 'scheduled' || match.state === 'in_progress' ? (
+        <form action={resultAction}>
+          <input type="hidden" name="matchId" value={match.id} />
+          <input type="hidden" name="version" value={match.version} />
+          <label>
+            Sets
+            <select value={sets} onChange={(event) => setSets(Number(event.target.value))}>
+              <option value={1}>1 set</option>
+              <option value={2}>2 sets</option>
+              <option value={3}>3 sets</option>
+            </select>
+          </label>
+          {Array.from({ length: sets }, (_, index) => (
+            <fieldset key={index}>
+              <legend>Set {index + 1}</legend>
+              <label>
+                {homeTeam?.name ?? 'Local'}
+                <input name={`home-${index}`} type="number" min="0" max="9" required />
+              </label>
+              <label>
+                {awayTeam?.name ?? 'Visitante'}
+                <input name={`away-${index}`} type="number" min="0" max="9" required />
+              </label>
+            </fieldset>
+          ))}
+          <button type="submit" disabled={resultPending}>
+            {resultPending ? 'Guardando...' : 'Guardar resultado'}
+          </button>
+        </form>
+      ) : null}
+      {match.state === 'scheduled' || match.state === 'in_progress' ? (
+        <form action={forfeitAction}>
+          <input type="hidden" name="matchId" value={match.id} />
+          <input type="hidden" name="version" value={match.version} />
+          <label>
+            Equipo que no se presenta
+            <select name="forfeitTeamId" required>
+              <option value="">Seleccionar</option>
+              {homeTeam ? <option value={homeTeam.id}>{homeTeam.name}</option> : null}
+              {awayTeam ? <option value={awayTeam.id}>{awayTeam.name}</option> : null}
+            </select>
+          </label>
+          <label>
+            Motivo
+            <select name="reason" required>
+              <option value="absence">Ausencia</option>
+              <option value="retirement">Retiro</option>
+            </select>
+          </label>
+          <button type="submit" disabled={forfeitPending}>
+            {forfeitPending ? 'Guardando...' : 'Registrar derrota automatica'}
+          </button>
+        </form>
+      ) : null}
+      {match.state === 'pending' || match.state === 'scheduled' ? (
+        <form action={moveAction}>
+          <input type="hidden" name="matchId" value={match.id} />
+          <input type="hidden" name="tournamentId" value={tournamentId} />
+          <label>
+            Cancha
+            <select name="courtId" defaultValue={enabledCourts[0]?.id ?? ''} required>
+              {enabledCourts.map((court) => (
+                <option key={court.id} value={court.id}>
+                  {court.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Nueva hora
+            <input name="startsAt" type="datetime-local" required />
+          </label>
+          <button type="submit" disabled={movePending}>
+            {movePending ? 'Moviendo...' : 'Mover partido'}
+          </button>
+        </form>
+      ) : null}
       {match.state === 'completed' || match.state === 'forfeit' ? (
         <form action={clearAction}>
           <input type="hidden" name="matchId" value={match.id} />
@@ -211,19 +236,16 @@ function MatchOperations({
           </button>
         </form>
       ) : null}
-      <input type="hidden" name="tournamentId" value={tournamentId} />
       {errors.map((error) => (
         <p key={error} role="alert">
           {error}
         </p>
       ))}
-      {[startState.success, resultState.success, forfeitState.success, clearState.success, moveState.success]
-        .filter(Boolean)
-        .map((success) => (
-          <p key={success} role="status">
-            {success}
-          </p>
-        ))}
+      {successes.map((success) => (
+        <p key={success} role="status">
+          {success}
+        </p>
+      ))}
     </div>
   )
 }

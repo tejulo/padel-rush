@@ -4,19 +4,18 @@ import { db } from '@/lib/db/client'
 import { users } from '@/lib/db/schema'
 import { hashPassword } from '@/lib/auth/password'
 
-const organizer = { username: 'organizador1', password: 'padel-seguro1' }
-
 export async function seedE2E(): Promise<void> {
-  const [existing] = await db.select().from(users).where(eq(users.username, organizer.username)).limit(1)
-  if (existing) return
+  await upsertUser('organizador1', 'padel-seguro1', 'organizer')
+}
 
-  await db.insert(users).values({
-    id: randomUUID(),
-    username: organizer.username,
-    passwordHash: await hashPassword(organizer.password),
-    role: 'organizer',
-    state: 'active',
-  })
+export async function upsertUser(username: string, password: string, role: 'admin' | 'organizer'): Promise<void> {
+  const passwordHash = await hashPassword(password)
+  const [existing] = await db.select().from(users).where(eq(users.username, username)).limit(1)
+  if (existing) {
+    await db.update(users).set({ passwordHash, state: 'active', role }).where(eq(users.id, existing.id))
+    return
+  }
+  await db.insert(users).values({ id: randomUUID(), username, passwordHash, role, state: 'active' })
 }
 
 if (process.argv[1]?.endsWith('seed-e2e.ts')) {

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/guards'
 import type { ActionState } from '@/app/actions/tournaments'
-import { createOrganizer, deactivateOrganizer, listOrganizers, resetOrganizerPassword } from '@/lib/services/users'
+import { createOrganizer, deactivateOrganizer, resetOrganizerPassword } from '@/lib/services/users'
 
 export type { ActionState } from '@/app/actions/tournaments'
 
@@ -53,11 +53,6 @@ export async function createOrganizerAction(_previousState: ActionState, formDat
 
   revalidatePath('/admin/organizers')
   return { success: 'Organizador creado' }
-}
-
-export async function listOrganizerOptions() {
-  await requireRole('admin')
-  return listOrganizers()
 }
 
 export async function saveSettingsAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {

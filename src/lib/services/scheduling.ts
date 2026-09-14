@@ -31,10 +31,21 @@ function zoneOffset(instant: Date, timeZone: string): number {
   return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute')) - instant.getTime()
 }
 
-function tournamentInstant(tournament: Tournament, time: string): Date {
+export function tournamentInstant(tournament: Tournament, time: string): Date {
   const [year, month, day] = tournament.date.split('-').map(Number)
   const [hour, minute] = time.split(':').map(Number)
   const wall = Date.UTC(year, month - 1, day, hour, minute)
+  const guess = wall - zoneOffset(new Date(wall), tournament.timezone)
+  return new Date(wall - zoneOffset(new Date(guess), tournament.timezone))
+}
+
+export function tournamentLocalToInstant(tournament: Tournament, value: string): Date {
+  const [datePart, timePart] = value.split('T')
+  if (!datePart || !timePart || datePart !== tournament.date) throw new Error('El partido debe jugarse el dia del torneo')
+  const [year, month, day] = datePart.split('-').map(Number)
+  const [hour, minute] = timePart.split(':').map(Number)
+  if ([year, month, day, hour, minute].some((part) => !Number.isFinite(part))) throw new Error('Hora invalida')
+  const wall = Date.UTC(year!, month! - 1, day!, hour!, minute!)
   const guess = wall - zoneOffset(new Date(wall), tournament.timezone)
   return new Date(wall - zoneOffset(new Date(guess), tournament.timezone))
 }
@@ -203,8 +214,8 @@ export async function replanPendingMatches(tournamentId: string, from: Date, tx?
   })
 }
 
-export async function assertManualSchedule(input: ManualScheduleInput): Promise<void> {
-  const { tournament, matchRows, slotRows, memberRows } = await loadTournamentGraph(db, input.tournamentId)
+export async function assertManualSchedule(input: ManualScheduleInput, tx?: TournamentTransaction): Promise<void> {
+  const { tournament, matchRows, slotRows, memberRows } = await loadTournamentGraph(tx ?? db, input.tournamentId)
   const { participants } = indexSlots(slotRows, memberRows)
   const proposed = new Set(participants.get(input.matchId) ?? [])
   const startsAt = input.startsAt.getTime()

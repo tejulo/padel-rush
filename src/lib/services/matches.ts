@@ -16,7 +16,7 @@ import {
 import { validateScore, type ScoreSet } from '@/lib/domain/scoring'
 import type { MatchSlot } from '@/lib/domain/types'
 import { lockTournamentForWrite, type TournamentTransaction } from '@/lib/services/tournaments'
-import { assertManualSchedule, replanPendingMatches } from '@/lib/services/scheduling'
+import { assertManualSchedule, replanPendingMatches, tournamentInstant } from '@/lib/services/scheduling'
 
 export interface RecordResultInput {
   matchId: string
@@ -126,36 +126,54 @@ export interface MoveMatchInput {
 }
 
 export async function moveMatch(input: MoveMatchInput): Promise<Match> {
-  const context = await getMatchContext(input.matchId)
-  if (!context || context.tournament.id !== input.tournamentId) throw new Error('Partido no encontrado')
-  if (context.match.state !== 'pending' && context.match.state !== 'scheduled') {
-    throw new Error('Solo se pueden mover partidos pendientes')
-  }
-  const [court] = await db
-    .select()
-    .from(courts)
-    .where(and(eq(courts.id, input.courtId), eq(courts.tournamentId, input.tournamentId)))
-    .limit(1)
-  if (!court?.enabled) throw new Error('La cancha no esta habilitada')
+  return db.transaction(async (tx) => {
+    const [reference] = await tx
+      .select({ tournamentId: categories.tournamentId })
+      .from(matches)
+      .innerJoin(categories, eq(matches.categoryId, categories.id))
+      .where(eq(matches.id, input.matchId))
+      .limit(1)
+    if (!reference || reference.tournamentId !== input.tournamentId) throw new Error('Partido no encontrado')
 
-  const minutes = context.match.format === 'best-of-three' ? context.tournament.longMatchMinutes : context.tournament.shortMatchMinutes
-  const endsAt = new Date(input.startsAt.getTime() + minutes * 60_000)
-  await assertManualSchedule({ ...input, endsAt })
+    const { tournament } = await lockTournamentForWrite(tx, input.tournamentId)
+    if (tournament.state !== 'in_progress') throw new Error('El torneo no admite cambios de horario')
+    const [match] = await tx.select().from(matches).where(eq(matches.id, input.matchId)).for('update').limit(1)
+    if (!match) throw new Error('Partido no encontrado')
+    if (match.state !== 'pending' && match.state !== 'scheduled') {
+      throw new Error('Solo se pueden mover partidos pendientes')
+    }
 
-  const [updated] = await db
-    .update(matches)
-    .set({
-      courtId: input.courtId,
-      scheduledStartAt: input.startsAt,
-      scheduledEndAt: endsAt,
-      state: 'scheduled',
-      version: sql<number>`${matches.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(matches.id, input.matchId), inArray(matches.state, ['pending', 'scheduled'])))
-    .returning()
-  if (!updated) throw new Error('Datos desactualizados')
-  return updated
+    const [court] = await tx
+      .select()
+      .from(courts)
+      .where(and(eq(courts.id, input.courtId), eq(courts.tournamentId, input.tournamentId)))
+      .limit(1)
+    if (!court?.enabled) throw new Error('La cancha no esta habilitada')
+
+    const minutes = match.format === 'best-of-three' ? tournament.longMatchMinutes : tournament.shortMatchMinutes
+    const endsAt = new Date(input.startsAt.getTime() + minutes * 60_000)
+    const startLimit = tournamentInstant(tournament, tournament.startsAt)
+    const endLimit = tournamentInstant(tournament, tournament.endsAt)
+    if (input.startsAt.getTime() < startLimit.getTime()) throw new Error('El partido no puede empezar antes del torneo')
+    if (endsAt.getTime() > endLimit.getTime()) throw new Error('El partido no puede terminar despues de la hora limite')
+
+    await assertManualSchedule({ ...input, endsAt }, tx)
+
+    const [updated] = await tx
+      .update(matches)
+      .set({
+        courtId: input.courtId,
+        scheduledStartAt: input.startsAt,
+        scheduledEndAt: endsAt,
+        state: 'scheduled',
+        version: sql<number>`${matches.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(matches.id, input.matchId), inArray(matches.state, ['pending', 'scheduled'])))
+      .returning()
+    if (!updated) throw new Error('Datos desactualizados')
+    return updated
+  })
 }
 
 export async function getMatchContext(matchId: string): Promise<MatchContext | null> {
