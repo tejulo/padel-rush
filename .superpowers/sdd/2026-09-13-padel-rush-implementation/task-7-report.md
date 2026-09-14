@@ -61,3 +61,33 @@ Fixed or tightened:
 - Substitution does not re-validate the whole category for duplicates created by a later manual registration change; it validates the replacement against current team membership.
 - Scheduling is not triggered after results yet; Task 8 owns replanning and may need to call into `finishMatch`/`clearResult` paths.
 - Integration verification requires the local PostgreSQL service and the explicit `DATABASE_URL` shown above.
+
+## Review Fix Report
+
+### Commit
+
+Fix commit: `b52c65326aaa132efeb20789093dacac5cdbfcba` (`fix: accept seven-five long sets`).
+
+### Ruling Applied
+
+Long best-of-three sets follow the spec's two-game margin: a 7-5 set win is now valid, in addition to the plan's enumerated 6-0..6-4 and 7-6. Set-sequence logic is unchanged, so a best-of-three series still must end at exactly two winning sets and reject a third set after a 2-0 start.
+
+### Findings Addressed
+
+- `validLongSet` accepts `winner === 7` with `loser === 5` or `6`.
+- Unit tests cover a full 2-1 result containing a 7-5 set, a straight 2-0 result with two 7-5 sets, and rejections for 7-4, 8-6, a one-set series, and a third set after two wins.
+- Integration test records a real grand final with a 7-5 first set and verifies the persisted score, winner, and completed state.
+
+### Verification
+
+| Command | Result |
+| --- | --- |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test -- tests/unit/scoring.test.ts tests/integration/matches.test.ts` | Passed: 2 files, 20 tests. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test` | Passed: 14 files, 91 tests. |
+| `npx tsc --noEmit` | Passed. |
+| `npm run lint` | Passed with no errors or warnings. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run build` | Passed: Next.js production build and TypeScript checks completed successfully. |
+
+### Remaining Concerns
+
+- The reset-activation invariant, scheduling handoff, and local PostgreSQL requirement from the implementation section still apply.
