@@ -74,6 +74,23 @@ describe('authentication', () => {
     await expect(signIn('organizador1', password, '192.0.2.6')).resolves.toMatchObject({ ok: false, reason: 'locked' })
   })
 
+  it('does not share an IP lock between clients without an IP', async () => {
+    await db.insert(users).values({
+      id: 'organizer-2-id',
+      username: 'organizador2',
+      passwordHash: await hashPassword(password),
+      role: 'organizer',
+      state: 'active',
+    })
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await signIn('organizador1', 'incorrecta', null)
+    }
+
+    await expect(signIn('organizador2', password, null)).resolves.toMatchObject({ ok: true })
+    await expect(signIn('organizador1', password, null)).resolves.toMatchObject({ ok: false, reason: 'locked' })
+  })
+
   it('stores only a hash when a session is created', async () => {
     const [user] = await db.select().from(users).where(eq(users.id, 'organizer-id'))
     const result = await signIn('organizador1', password, '127.0.0.1')

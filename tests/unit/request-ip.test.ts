@@ -15,6 +15,6 @@ describe('request IP extraction', () => {
   })
 
   it('ignores invalid proxy headers', () => {
-    expect(requestIp(new Headers({ 'x-real-ip': 'not-an-ip', 'x-forwarded-for': 'also-not-an-ip' }))).toBe('unknown')
+    expect(requestIp(new Headers({ 'x-real-ip': 'not-an-ip', 'x-forwarded-for': 'also-not-an-ip' }))).toBeNull()
   })
 })

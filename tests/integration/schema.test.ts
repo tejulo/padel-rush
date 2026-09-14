@@ -52,4 +52,14 @@ describe('database schema', () => {
     expect(result.rows).toHaveLength(1)
     expect(result.rows[0]?.indexdef).toMatch(/unique.*role.*admin/i)
   })
+
+  it('allows login attempts without a validated IP address', async () => {
+    const result = await db.execute<{ is_nullable: string }>(sql`
+      select is_nullable
+      from information_schema.columns
+      where table_schema = 'public' and table_name = 'login_attempts' and column_name = 'ip_address'
+    `)
+
+    expect(result.rows[0]?.is_nullable).toBe('YES')
+  })
 })

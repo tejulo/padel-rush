@@ -5,7 +5,7 @@ function validIp(value: string | null): string | null {
   return ip && isIP(ip) ? ip : null
 }
 
-export function requestIp(headerStore: Headers): string {
+export function requestIp(headerStore: Headers): string | null {
   const realIp = validIp(headerStore.get('x-real-ip'))
   if (realIp) return realIp
 
@@ -17,5 +17,5 @@ export function requestIp(headerStore: Headers): string {
     }
   }
 
-  return 'unknown'
+  return null
 }

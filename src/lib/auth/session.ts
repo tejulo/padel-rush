@@ -71,7 +71,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   return result ?? null
 }
 
-export async function signIn(username: string, password: string, ipAddress = 'unknown'): Promise<SignInResult> {
+export async function signIn(username: string, password: string, ipAddress: string | null = null): Promise<SignInResult> {
   if (await isLoginLocked(username, ipAddress)) {
     return { ok: false, reason: 'locked', message: INVALID_CREDENTIALS_MESSAGE }
   }

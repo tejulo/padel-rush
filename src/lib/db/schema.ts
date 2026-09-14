@@ -81,7 +81,7 @@ export const sessions = pgTable(
 export const loginAttempts = pgTable('login_attempts', {
   id: text('id').primaryKey(),
   username: text('username').notNull(),
-  ipAddress: text('ip_address').notNull(),
+  ipAddress: text('ip_address'),
   successful: boolean('successful').notNull().default(false),
   attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull().defaultNow(),
 })

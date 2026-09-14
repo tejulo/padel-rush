@@ -62,3 +62,25 @@ The implementation uses Argon2id password hashes, SHA-256 hashes of random sessi
 | `npm run build` | Passed: Next.js production build and TypeScript checks completed successfully. |
 
 The direct `psql` verification command was unavailable because `psql` is not installed; the schema integration test verified the partial index through `pg_indexes`.
+
+## Follow-up Fix Report: Null IP Isolation
+
+### Finding Addressed
+
+- Missing or invalid proxy headers now produce `null`, not a shared literal IP value.
+- `login_attempts.ip_address` is nullable in the schema and additive migration `0003_magenta_rawhide_kid.sql`.
+- Username failures are always counted; IP failures are counted only for validated IP addresses.
+- Valid-IP extraction and independent username/IP lock behavior remain covered and unchanged.
+- The root `/` redirect and invalid-login UI remain deferred as previously ruled.
+
+### Verification
+
+| Command | Result |
+| --- | --- |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run db:migrate` | Passed; migration `0003_magenta_rawhide_kid.sql` applied. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test -- tests/integration/auth.test.ts tests/integration/schema.test.ts` | Passed on rerun: 2 test files, 11 tests. |
+| `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run test` | Passed: 5 test files, 17 tests. |
+| `npm run lint` | Passed. |
+| `npm run build` | Passed: Next.js production build and TypeScript checks completed successfully. |
+
+One earlier parallel auth/schema invocation was affected by the existing shared-database test reset race; the isolated rerun and full suite passed. Direct `psql` inspection remains unavailable because `psql` is not installed.
