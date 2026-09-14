@@ -75,6 +75,8 @@ The direct `psql` verification command was unavailable because `psql` is not ins
 
 ### Verification
 
+The Vitest file runner now executes serially because the integration suites share a database reset.
+
 | Command | Result |
 | --- | --- |
 | `DATABASE_URL=postgres://padel:padel@localhost:5432/padel_rush npm run db:migrate` | Passed; migration `0003_magenta_rawhide_kid.sql` applied. |
@@ -83,4 +85,4 @@ The direct `psql` verification command was unavailable because `psql` is not ins
 | `npm run lint` | Passed. |
 | `npm run build` | Passed: Next.js production build and TypeScript checks completed successfully. |
 
-One earlier parallel auth/schema invocation was affected by the existing shared-database test reset race; the isolated rerun and full suite passed. Direct `psql` inspection remains unavailable because `psql` is not installed.
+Direct `psql` inspection remains unavailable because `psql` is not installed.
