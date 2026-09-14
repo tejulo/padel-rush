@@ -1,0 +1,1 @@
+ALTER TABLE "teams" ADD COLUMN "substitution_used" boolean DEFAULT false NOT NULL;

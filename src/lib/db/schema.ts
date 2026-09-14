@@ -188,6 +188,7 @@ export const teams = pgTable(
     name: text('name').notNull(),
     levelTotal: integer('level_total').notNull().default(0),
     locked: boolean('locked').notNull().default(false),
+    substitutionUsed: boolean('substitution_used').notNull().default(false),
     lockedAt: timestamp('locked_at', { withTimezone: true }),
     version: integer('version').notNull().default(1),
     createdAt: createdAt(),
