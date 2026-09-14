@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq, isNull, notInArray } from 'drizzle-orm'
+import { and, asc, eq, isNull, notInArray } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import { sessions, tournaments, users } from '@/lib/db/schema'
 import { requireRole } from '@/lib/auth/guards'
@@ -65,6 +65,15 @@ export async function createOrganizer(input: OrganizerInput) {
     .returning()
 
   return organizer
+}
+
+export async function listOrganizers() {
+  await requireRole('admin')
+  return db
+    .select({ id: users.id, username: users.username, state: users.state })
+    .from(users)
+    .where(eq(users.role, 'organizer'))
+    .orderBy(asc(users.username))
 }
 
 export async function resetOrganizerPassword(organizerId: string, password: string) {

@@ -46,6 +46,12 @@ export const matchOutcomeEnum = pgEnum('match_outcome', ['winner', 'loser'])
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull().$type<unknown>(),
+  updatedAt: updatedAt(),
+})
+
 export const users = pgTable(
   'users',
   {

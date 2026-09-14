@@ -55,13 +55,15 @@ type ResolvedTournamentInput = Omit<
   enabledCourtCount: 2 | 3
 }
 
-function resolveTournamentInput(input: CreateTournamentInput): ResolvedTournamentInput {
+async function resolveWithGlobalSettings(input: CreateTournamentInput): Promise<ResolvedTournamentInput> {
+  const { getGlobalSettings } = await import('@/lib/services/settings')
+  const defaults = await getGlobalSettings()
   return {
     ...input,
-    endsAt: input.endsAt ?? tournamentDefaults.endsAt,
-    shortMatchMinutes: input.shortMatchMinutes ?? tournamentDefaults.shortMatchMinutes,
-    longMatchMinutes: input.longMatchMinutes ?? tournamentDefaults.longMatchMinutes,
-    restMinutes: input.restMinutes ?? tournamentDefaults.restMinutes,
+    endsAt: input.endsAt ?? defaults.endsAt,
+    shortMatchMinutes: input.shortMatchMinutes ?? defaults.shortMatchMinutes,
+    longMatchMinutes: input.longMatchMinutes ?? defaults.longMatchMinutes,
+    restMinutes: input.restMinutes ?? defaults.restMinutes,
     enabledCourtCount: input.enabledCourtCount ?? tournamentDefaults.enabledCourtCount,
   }
 }
@@ -176,7 +178,7 @@ export async function getCategories(tournamentId: string) {
 }
 
 export async function createTournament(input: CreateTournamentInput): Promise<TournamentWithCourts> {
-  const resolved = resolveTournamentInput(input)
+  const resolved = await resolveWithGlobalSettings(input)
   assertTournamentInput(resolved)
 
   return db.transaction(async (tx) => {

@@ -36,6 +36,13 @@
       "when": 1789404672664,
       "tag": "0004_grey_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789428263590,
+      "tag": "0005_app_settings",
+      "breakpoints": true
     }
   ]
 }

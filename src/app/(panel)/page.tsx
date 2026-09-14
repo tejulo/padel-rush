@@ -10,6 +10,7 @@ export default async function PanelPage() {
     <section>
       <div>
         <h1>Torneos</h1>
+        {user.role === 'admin' ? <Link href="/admin/organizers">Organizadores</Link> : null}
         <Link href="/tournaments/new">Nuevo torneo</Link>
       </div>
       {tournaments.length === 0 ? <p>No hay torneos.</p> : null}

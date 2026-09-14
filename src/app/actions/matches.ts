@@ -9,6 +9,7 @@ import {
   clearResult,
   getMatchContext,
   getTeamContext,
+  moveMatch,
   recordForfeit,
   recordResult,
   startMatch,
@@ -33,23 +34,37 @@ function errorState(error: unknown): ActionState {
 
 function scoreValue(formData: FormData): ScoreSet[] {
   const raw = value(formData, 'sets')
-  if (!raw) throw new Error('Falta el marcador')
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    throw new Error('Marcador invalido')
-  }
-  if (!Array.isArray(parsed)) throw new Error('Marcador invalido')
-  return parsed.map((set) => {
-    if (!set || typeof set !== 'object') throw new Error('Marcador invalido')
-    const home = (set as { home?: unknown }).home
-    const away = (set as { away?: unknown }).away
-    if (typeof home !== 'number' || typeof away !== 'number' || !Number.isInteger(home) || !Number.isInteger(away)) {
+  if (raw) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
       throw new Error('Marcador invalido')
     }
-    return { home, away }
-  })
+    if (!Array.isArray(parsed)) throw new Error('Marcador invalido')
+    return parsed.map((set) => {
+      if (!set || typeof set !== 'object') throw new Error('Marcador invalido')
+      const home = (set as { home?: unknown }).home
+      const away = (set as { away?: unknown }).away
+      if (typeof home !== 'number' || typeof away !== 'number' || !Number.isInteger(home) || !Number.isInteger(away)) {
+        throw new Error('Marcador invalido')
+      }
+      return { home, away }
+    })
+  }
+
+  const sets: ScoreSet[] = []
+  for (let index = 0; index < 3; index += 1) {
+    const home = formData.get(`home-${index}`)
+    const away = formData.get(`away-${index}`)
+    if (home === null && away === null) continue
+    const homeValue = Number(home)
+    const awayValue = Number(away)
+    if (!Number.isInteger(homeValue) || !Number.isInteger(awayValue)) throw new Error('Marcador invalido')
+    sets.push({ home: homeValue, away: awayValue })
+  }
+  if (sets.length === 0) throw new Error('Falta el marcador')
+  return sets
 }
 
 async function matchAccess(matchId: string, user: Awaited<ReturnType<typeof requireUser>>) {
@@ -137,6 +152,28 @@ export async function clearResultAction(_previousState: ActionState, formData: F
 
   revalidateMatchBoard(context.tournament.id, context.tournament.publicToken)
   return { success: 'Resultado corregido' }
+}
+
+export async function moveMatchAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser()
+  const matchId = value(formData, 'matchId')
+  const startsAt = value(formData, 'startsAt')
+  let context
+  try {
+    context = await matchAccess(matchId, user)
+    if (!startsAt) throw new Error('Falta la hora del partido')
+    await moveMatch({
+      matchId,
+      tournamentId: context.tournament.id,
+      courtId: value(formData, 'courtId'),
+      startsAt: new Date(startsAt),
+    })
+  } catch (error) {
+    return errorState(error)
+  }
+
+  revalidateMatchBoard(context.tournament.id, context.tournament.publicToken)
+  return { success: 'Partido reprogramado' }
 }
 
 export async function substitutePlayerAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {

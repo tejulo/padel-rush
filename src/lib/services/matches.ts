@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import {
   categories,
+  courts,
   matchSlots,
   matches,
   participants,
@@ -15,7 +16,7 @@ import {
 import { validateScore, type ScoreSet } from '@/lib/domain/scoring'
 import type { MatchSlot } from '@/lib/domain/types'
 import { lockTournamentForWrite, type TournamentTransaction } from '@/lib/services/tournaments'
-import { replanPendingMatches } from '@/lib/services/scheduling'
+import { assertManualSchedule, replanPendingMatches } from '@/lib/services/scheduling'
 
 export interface RecordResultInput {
   matchId: string
@@ -72,6 +73,89 @@ async function lockedMatchContext(tx: MatchDatabase, matchId: string): Promise<M
   const category = tournamentCategories.find((row) => row.id === match.categoryId)
   if (!category) throw new Error('Categoria no encontrada')
   return { match, category, tournament }
+}
+
+export type MatchBoardEntry = {
+  match: Match
+  category: typeof categories.$inferSelect
+  courtName: string | null
+  homeTeam: { id: string; name: string } | null
+  awayTeam: { id: string; name: string } | null
+}
+
+export async function listTournamentMatches(tournamentId: string): Promise<MatchBoardEntry[]> {
+  const rows = await db
+    .select({
+      match: matches,
+      category: categories,
+      courtName: courts.name,
+      slot: matchSlots.slot,
+      teamId: teams.id,
+      teamName: teams.name,
+    })
+    .from(matches)
+    .innerJoin(categories, eq(matches.categoryId, categories.id))
+    .leftJoin(courts, eq(matches.courtId, courts.id))
+    .leftJoin(matchSlots, eq(matchSlots.matchId, matches.id))
+    .leftJoin(teams, eq(matchSlots.teamId, teams.id))
+    .where(eq(categories.tournamentId, tournamentId))
+    .orderBy(asc(categories.category), asc(matches.round), asc(matches.position), asc(matchSlots.slot))
+
+  const board = new Map<string, MatchBoardEntry>()
+  for (const row of rows) {
+    const entry = board.get(row.match.id) ?? {
+      match: row.match,
+      category: row.category,
+      courtName: row.courtName,
+      homeTeam: null,
+      awayTeam: null,
+    }
+    const team = row.teamId && row.teamName ? { id: row.teamId, name: row.teamName } : null
+    if (row.slot === 'a') entry.homeTeam = team
+    if (row.slot === 'b') entry.awayTeam = team
+    board.set(row.match.id, entry)
+  }
+  return [...board.values()]
+}
+
+export interface MoveMatchInput {
+  matchId: string
+  courtId: string
+  startsAt: Date
+  tournamentId: string
+}
+
+export async function moveMatch(input: MoveMatchInput): Promise<Match> {
+  const context = await getMatchContext(input.matchId)
+  if (!context || context.tournament.id !== input.tournamentId) throw new Error('Partido no encontrado')
+  if (context.match.state !== 'pending' && context.match.state !== 'scheduled') {
+    throw new Error('Solo se pueden mover partidos pendientes')
+  }
+  const [court] = await db
+    .select()
+    .from(courts)
+    .where(and(eq(courts.id, input.courtId), eq(courts.tournamentId, input.tournamentId)))
+    .limit(1)
+  if (!court?.enabled) throw new Error('La cancha no esta habilitada')
+
+  const minutes = context.match.format === 'best-of-three' ? context.tournament.longMatchMinutes : context.tournament.shortMatchMinutes
+  const endsAt = new Date(input.startsAt.getTime() + minutes * 60_000)
+  await assertManualSchedule({ ...input, endsAt })
+
+  const [updated] = await db
+    .update(matches)
+    .set({
+      courtId: input.courtId,
+      scheduledStartAt: input.startsAt,
+      scheduledEndAt: endsAt,
+      state: 'scheduled',
+      version: sql<number>`${matches.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(matches.id, input.matchId), inArray(matches.state, ['pending', 'scheduled'])))
+    .returning()
+  if (!updated) throw new Error('Datos desactualizados')
+  return updated
 }
 
 export async function getMatchContext(matchId: string): Promise<MatchContext | null> {
