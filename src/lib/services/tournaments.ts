@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/auth/guards'
 import type { SessionUser } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { categories, courts, tournaments, users, type Court, type Tournament } from '@/lib/db/schema'
+import { replanPendingMatches } from '@/lib/services/scheduling'
 
 export const tournamentDefaults = {
   endsAt: '21:00',
@@ -288,6 +289,9 @@ export async function updateTournament(input: UpdateTournamentInput): Promise<To
         .update(courts)
         .set({ enabled: true })
         .where(and(eq(courts.tournamentId, input.id), lte(courts.position, input.enabledCourtCount)))
+      if (updated.state === 'in_progress') {
+        await replanPendingMatches(input.id, new Date(), tx)
+      }
     }
 
     const updatedCourts = await tx

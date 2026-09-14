@@ -283,7 +283,7 @@ export async function startMatch(matchId: string, version: number): Promise<Matc
 }
 
 export async function recordResult(input: RecordResultInput): Promise<Match> {
-  const { updated, tournamentId } = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const context = await lockedMatchContext(tx, input.matchId)
     assertActiveTournament(context)
     assertPlayable(context.match)
@@ -293,10 +293,9 @@ export async function recordResult(input: RecordResultInput): Promise<Match> {
     const slots = await lockedSlots(tx, input.matchId)
     const { winnerTeamId, loserTeamId, winningSlot } = winnerAndLoser(slots, validation.winner)
     const result = await finishMatch(tx, context, winnerTeamId, loserTeamId, winningSlot, input.sets, null)
-    return { updated: result, tournamentId: context.tournament.id }
+    await replanPendingMatches(context.tournament.id, new Date(), tx)
+    return result
   })
-  await replanPendingMatches(tournamentId, new Date())
-  return updated
 }
 
 function forfeitScore(format: Match['format'], homeTeamId: string, loserTeamId: string): ScoreSet[] {
@@ -306,7 +305,7 @@ function forfeitScore(format: Match['format'], homeTeamId: string, loserTeamId: 
 }
 
 export async function recordForfeit(input: ForfeitInput): Promise<Match> {
-  const { updated, tournamentId } = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const context = await lockedMatchContext(tx, input.matchId)
     assertActiveTournament(context)
     assertPlayable(context.match)
@@ -327,10 +326,9 @@ export async function recordForfeit(input: ForfeitInput): Promise<Match> {
       forfeitScore(context.match.format, home.teamId!, input.forfeitTeamId),
       input.reason,
     )
-    return { updated: result, tournamentId: context.tournament.id }
+    await replanPendingMatches(context.tournament.id, new Date(), tx)
+    return result
   })
-  await replanPendingMatches(tournamentId, new Date())
-  return updated
 }
 
 async function dependentMatchIds(tx: MatchDatabase, categoryId: string, sourceMatchId: string): Promise<Set<string>> {
@@ -413,7 +411,7 @@ async function clearDownstreamRoutes(tx: MatchDatabase, categoryId: string, sour
 }
 
 export async function clearResult(matchId: string, version: number): Promise<void> {
-  const tournamentId = await db.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const context = await lockedMatchContext(tx, matchId)
     if (context.match.state !== 'completed' && context.match.state !== 'forfeit') {
       throw new Error('El partido no tiene un resultado para corregir')
@@ -449,9 +447,8 @@ export async function clearResult(matchId: string, version: number): Promise<voi
         .set({ state: 'in_progress', version: sql<number>`${tournaments.version} + 1`, updatedAt: new Date() })
         .where(and(eq(tournaments.id, context.tournament.id), eq(tournaments.state, 'finished')))
     }
-    return context.tournament.id
+    await replanPendingMatches(context.tournament.id, new Date(), tx)
   })
-  await replanPendingMatches(tournamentId, new Date())
 }
 
 function assertSubstitutionGender(category: CategoryRow['category'], members: readonly { gender: string }[]): void {

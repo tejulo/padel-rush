@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
-import { categories, courts, matches, participants, registrations, users, type Court, type Match } from '@/lib/db/schema'
+import { categories, courts, matches, participants, registrations, tournaments, users, type Court, type Match } from '@/lib/db/schema'
 import { resetDatabase } from '@/lib/test/database'
 import { makeTournamentInput } from '@/lib/test/factories'
 import { createBrackets } from '@/lib/services/brackets'
 import { assertManualSchedule, replanPendingMatches } from '@/lib/services/scheduling'
 import { cancelCategory, lockTeams, saveTeams } from '@/lib/services/teams'
-import { createTournament } from '@/lib/services/tournaments'
+import { createTournament, updateTournament } from '@/lib/services/tournaments'
 
 type CategoryName = 'men' | 'women' | 'mixed'
 
@@ -197,6 +197,74 @@ describe('scheduling service', () => {
 
     const mixedMatch = await matchByStage(categoryIds.get('mixed')!, 'winners-final')
     expect(mixedMatch.scheduledStartAt?.getTime()).toBe(replanFrom.getTime())
+  })
+
+  it('replans through updateTournament when the uncovered court is disabled', async () => {
+    await seedTournament([simpleCategory('men'), simpleCategory('women'), simpleCategory('mixed')])
+    await createBrackets(tournamentId)
+
+    const uncoveredCourt = tournamentCourts.find((court) => !court.covered)!
+    const before = (await db.select().from(matches)).filter((match) => match.courtId === uncoveredCourt.id)
+    expect(before).toHaveLength(1)
+
+    const [current] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId))
+    await updateTournament({ id: tournamentId, version: current!.version, enabledCourtCount: 2 })
+
+    const openMatches = (await db.select().from(matches)).filter((match) =>
+      ['pending', 'scheduled'].includes(match.state),
+    )
+    expect(openMatches.filter((match) => match.courtId)).toHaveLength(3)
+    for (const match of openMatches) expect(match.courtId).not.toBe(uncoveredCourt.id)
+  })
+
+  it('prioritizes a match that became ready earlier than a later one', async () => {
+    const categoryIds = await seedTournament([simpleCategory('men'), simpleCategory('women')])
+    await createBrackets(tournamentId)
+
+    const menMatch = await matchByStage(categoryIds.get('men')!, 'winners-final')
+    const womenMatch = await matchByStage(categoryIds.get('women')!, 'winners-final')
+    const early = new Date('2026-10-04T09:00:00.000Z')
+    const late = new Date('2026-10-04T11:00:00.000Z')
+    await db.update(matches).set({ scheduledEndAt: early, scheduledStartAt: new Date('2026-10-04T08:20:00.000Z') }).where(eq(matches.id, menMatch.id))
+    await db.update(matches).set({ scheduledEndAt: late, scheduledStartAt: new Date('2026-10-04T10:20:00.000Z') }).where(eq(matches.id, womenMatch.id))
+
+    const replanFrom = new Date('2026-10-04T12:00:00.000Z')
+    await replanPendingMatches(tournamentId, replanFrom)
+
+    const men = await matchById(menMatch.id)
+    const women = await matchById(womenMatch.id)
+    expect(men.scheduledStartAt!.getTime()).toBeLessThanOrEqual(women.scheduledStartAt!.getTime())
+  })
+
+  it('blocks a delayed in-progress match until its real duration is covered', async () => {
+    const categoryIds = await seedTournament([simpleCategory('men'), simpleCategory('women')])
+    await db.update(courts).set({ enabled: false }).where(eq(courts.position, 2))
+    await db.update(courts).set({ enabled: false }).where(eq(courts.position, 3))
+    await createBrackets(tournamentId)
+
+    const menMatch = await matchByStage(categoryIds.get('men')!, 'winners-final')
+    const womenMatch = await matchByStage(categoryIds.get('women')!, 'winners-final')
+    const staleStart = new Date('2026-10-04T09:00:00.000Z')
+    const lateStart = new Date('2026-10-04T09:35:00.000Z')
+    await db
+      .update(matches)
+      .set({
+        state: 'in_progress',
+        actualStartAt: lateStart,
+        scheduledStartAt: staleStart,
+        scheduledEndAt: new Date(staleStart.getTime() + 90 * 60_000),
+      })
+      .where(eq(matches.id, menMatch.id))
+    await db
+      .update(matches)
+      .set({ state: 'scheduled', courtId: null, scheduledStartAt: null, scheduledEndAt: null })
+      .where(eq(matches.id, womenMatch.id))
+
+    const replanFrom = new Date('2026-10-04T10:00:00.000Z')
+    await replanPendingMatches(tournamentId, replanFrom)
+
+    const women = await matchById(womenMatch.id)
+    expect(women.scheduledStartAt!.getTime()).toBeGreaterThanOrEqual(lateStart.getTime() + 90 * 60_000)
   })
 
   it('rejects a manual schedule that overlaps another match on the same court', async () => {

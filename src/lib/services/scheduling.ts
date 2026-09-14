@@ -8,11 +8,14 @@ import {
   type ParticipantReservation,
   type SchedulingMatch,
 } from '@/lib/domain/scheduling'
+import type { TournamentTransaction } from '@/lib/services/tournaments'
 
 const MINUTE = 60_000
 type MatchState = Match['state']
 const OPEN_STATES: readonly MatchState[] = ['pending', 'scheduled']
 const FIXED_STATES: readonly MatchState[] = ['in_progress', 'completed', 'forfeit']
+
+export type SchedulingDatabase = typeof db | TournamentTransaction
 
 export interface ManualScheduleInput {
   matchId: string
@@ -36,24 +39,47 @@ function tournamentInstant(tournament: Tournament, time: string): Date {
   return new Date(wall - zoneOffset(new Date(guess), tournament.timezone))
 }
 
-async function loadTournamentGraph(tournamentId: string) {
-  const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1)
+async function lockTournamentRow(tx: TournamentTransaction, tournamentId: string): Promise<Tournament> {
+  const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId)).for('update').limit(1)
   if (!tournament) throw new Error('Torneo no encontrado')
-  const tournamentCourts = await db.select().from(courts).where(eq(courts.tournamentId, tournamentId)).orderBy(asc(courts.position))
-  const categoryRows = await db.select({ id: categories.id }).from(categories).where(eq(categories.tournamentId, tournamentId))
+  return tournament
+}
+
+async function loadTournamentGraph(database: SchedulingDatabase, tournamentId: string) {
+  const [tournament] = await database.select().from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1)
+  if (!tournament) throw new Error('Torneo no encontrado')
+  const tournamentCourts = await database.select().from(courts).where(eq(courts.tournamentId, tournamentId)).orderBy(asc(courts.position))
+  const categoryRows = await database.select({ id: categories.id }).from(categories).where(eq(categories.tournamentId, tournamentId))
   const categoryIds = categoryRows.map((row) => row.id)
-  const matchRows = categoryIds.length ? await db.select().from(matches).where(inArray(matches.categoryId, categoryIds)) : []
+  const matchRows = categoryIds.length
+    ? await database
+        .select()
+        .from(matches)
+        .where(inArray(matches.categoryId, categoryIds))
+        .orderBy(asc(matches.createdAt), asc(matches.id))
+    : []
   const matchIds = matchRows.map((row) => row.id)
   const slotRows = matchIds.length
-    ? await db.select({ matchId: matchSlots.matchId, teamId: matchSlots.teamId, sourceMatchId: matchSlots.sourceMatchId }).from(matchSlots).where(inArray(matchSlots.matchId, matchIds))
+    ? await database
+        .select({
+          matchId: matchSlots.matchId,
+          teamId: matchSlots.teamId,
+          sourceMatchId: matchSlots.sourceMatchId,
+          sourceOutcome: matchSlots.sourceOutcome,
+        })
+        .from(matchSlots)
+        .where(inArray(matchSlots.matchId, matchIds))
     : []
   const memberRows = categoryIds.length
-    ? await db.select({ teamId: teamMembers.teamId, participantId: teamMembers.participantId }).from(teamMembers).where(inArray(teamMembers.categoryId, categoryIds))
+    ? await database
+        .select({ teamId: teamMembers.teamId, participantId: teamMembers.participantId })
+        .from(teamMembers)
+        .where(inArray(teamMembers.categoryId, categoryIds))
     : []
   return { tournament, tournamentCourts, matchRows, slotRows, memberRows }
 }
 
-type SlotRow = { matchId: string; teamId: string | null; sourceMatchId: string | null }
+type SlotRow = { matchId: string; teamId: string | null; sourceMatchId: string | null; sourceOutcome: string | null }
 type MemberRow = { teamId: string; participantId: string }
 
 function indexSlots(slotRows: readonly SlotRow[], memberRows: readonly MemberRow[]) {
@@ -69,20 +95,49 @@ function indexSlots(slotRows: readonly SlotRow[], memberRows: readonly MemberRow
 function fixedInterval(match: Match, shortMinutes: number, longMinutes: number): { startsAt: Date; endsAt: Date } | null {
   const startsAt = match.actualStartAt ?? match.scheduledStartAt
   if (!startsAt) return null
+  const minutes = match.format === 'best-of-three' ? longMinutes : shortMinutes
+  const fallbackEnd = new Date(startsAt.getTime() + minutes * MINUTE)
+  if (match.actualStartAt && !match.actualEndAt) {
+    const scheduledEnd = match.scheduledEndAt?.getTime() ?? 0
+    return { startsAt, endsAt: new Date(Math.max(scheduledEnd, fallbackEnd.getTime())) }
+  }
   const endsAt = match.actualEndAt ?? match.scheduledEndAt
   if (endsAt && endsAt.getTime() > startsAt.getTime()) return { startsAt, endsAt }
-  const minutes = match.format === 'best-of-three' ? longMinutes : shortMinutes
-  return { startsAt, endsAt: new Date(startsAt.getTime() + minutes * MINUTE) }
+  return { startsAt, endsAt: fallbackEnd }
 }
 
-export async function replanPendingMatches(tournamentId: string, from: Date): Promise<void> {
-  const { tournament, tournamentCourts, matchRows, slotRows, memberRows } = await loadTournamentGraph(tournamentId)
+function distinctDependentCounts(slotRows: readonly SlotRow[]): Map<string, number> {
+  const targets = new Map<string, Set<string>>()
+  for (const slot of slotRows) {
+    if (!slot.sourceMatchId) continue
+    const set = targets.get(slot.sourceMatchId) ?? new Set<string>()
+    set.add(slot.matchId)
+    targets.set(slot.sourceMatchId, set)
+  }
+  return new Map([...targets].map(([sourceId, set]) => [sourceId, set.size]))
+}
+
+function readinessByMatch(matchRows: readonly Match[], slotRows: readonly SlotRow[], from: Date): Map<string, Date> {
+  const byId = new Map(matchRows.map((match) => [match.id, match]))
+  const readiness = new Map<string, Date>()
+  for (const slot of slotRows) {
+    if (!slot.sourceMatchId) continue
+    const source = byId.get(slot.sourceMatchId)
+    const readyAt = source?.actualEndAt ?? source?.scheduledEndAt ?? from
+    const current = readiness.get(slot.matchId)
+    if (!current || readyAt.getTime() > current.getTime()) readiness.set(slot.matchId, readyAt)
+  }
+  return readiness
+}
+
+async function replanWith(database: SchedulingDatabase, tournamentId: string, from: Date): Promise<void> {
+  const { tournament, tournamentCourts, matchRows, slotRows, memberRows } = await loadTournamentGraph(database, tournamentId)
   if (!tournamentCourts.some((court) => court.enabled)) return
   if (!matchRows.some((match) => OPEN_STATES.includes(match.state))) return
   const { teams, participants } = indexSlots(slotRows, memberRows)
 
-  const dependentCounts = new Map<string, number>()
-  for (const slot of slotRows) if (slot.sourceMatchId) dependentCounts.set(slot.sourceMatchId, (dependentCounts.get(slot.sourceMatchId) ?? 0) + 1)
+  const dependentCounts = distinctDependentCounts(slotRows)
+  const readiness = readinessByMatch(matchRows, slotRows, from)
   const conditionalResets: ConditionalReset[] = matchRows
     .filter((match) => match.state === 'cancelled' && match.resultReason === 'conditional-reset')
     .flatMap((match) => {
@@ -96,7 +151,7 @@ export async function replanPendingMatches(tournamentId: string, from: Date): Pr
       id: match.id,
       format: match.format,
       participantIds: participants.get(match.id) ?? [],
-      readyAt: from,
+      readyAt: readiness.get(match.id) ?? from,
       dependentCount: dependentCounts.get(match.id) ?? 0,
     }))
 
@@ -122,19 +177,35 @@ export async function replanPendingMatches(tournamentId: string, from: Date): Pr
     conditionalResets,
   })
 
-  await db.transaction(async (tx) => {
-    for (const entry of schedule) {
-      const slot = { courtId: entry.courtId, scheduledStartAt: entry.startsAt, scheduledEndAt: entry.endsAt }
-      const target = entry.conditional
-        ? and(eq(matches.id, entry.matchId), eq(matches.state, 'cancelled'), eq(matches.resultReason, 'conditional-reset'))
-        : and(eq(matches.id, entry.matchId), inArray(matches.state, OPEN_STATES))
-      await tx.update(matches).set(slot).where(target)
+  for (const entry of schedule) {
+    const slot = { courtId: entry.courtId, scheduledStartAt: entry.startsAt, scheduledEndAt: entry.endsAt }
+    if (entry.conditional) {
+      await database
+        .update(matches)
+        .set(slot)
+        .where(and(eq(matches.id, entry.matchId), eq(matches.state, 'cancelled'), eq(matches.resultReason, 'conditional-reset')))
+      continue
     }
+    await database
+      .update(matches)
+      .set({ ...slot, state: 'scheduled' })
+      .where(and(eq(matches.id, entry.matchId), inArray(matches.state, OPEN_STATES)))
+  }
+}
+
+export async function replanPendingMatches(tournamentId: string, from: Date, tx?: TournamentTransaction): Promise<void> {
+  if (tx) {
+    await replanWith(tx, tournamentId, from)
+    return
+  }
+  await db.transaction(async (innerTx) => {
+    await lockTournamentRow(innerTx, tournamentId)
+    await replanWith(innerTx, tournamentId, from)
   })
 }
 
 export async function assertManualSchedule(input: ManualScheduleInput): Promise<void> {
-  const { tournament, matchRows, slotRows, memberRows } = await loadTournamentGraph(input.tournamentId)
+  const { tournament, matchRows, slotRows, memberRows } = await loadTournamentGraph(db, input.tournamentId)
   const { participants } = indexSlots(slotRows, memberRows)
   const proposed = new Set(participants.get(input.matchId) ?? [])
   const startsAt = input.startsAt.getTime()

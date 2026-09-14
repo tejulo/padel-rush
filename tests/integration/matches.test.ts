@@ -180,7 +180,7 @@ describe('match operations', () => {
     })
 
     const reset = await match('grand-final-reset')
-    expect(reset).toMatchObject({ state: 'pending', resultReason: null })
+    expect(reset).toMatchObject({ state: 'scheduled', resultReason: null })
     expect(await db.select().from(matchSlots).where(eq(matchSlots.matchId, reset.id))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ slot: 'a', teamId: teamIds[1] }),
@@ -246,7 +246,7 @@ describe('match operations', () => {
     await play('grand-final', 1, 1, 'away')
 
     const activated = await match('grand-final-reset')
-    expect(activated).toMatchObject({ state: 'pending', resultReason: null })
+    expect(activated).toMatchObject({ state: 'scheduled', resultReason: null })
     expect(await db.select().from(matchSlots).where(eq(matchSlots.matchId, activated.id))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ slot: 'a', teamId: teamIds[4] }),
@@ -306,6 +306,10 @@ describe('match operations', () => {
 
   it('rejects stale result versions and unfinished matches', async () => {
     await seedBracket()
+    await db
+      .update(matches)
+      .set({ state: 'pending', courtId: null, scheduledStartAt: null, scheduledEndAt: null })
+      .where(and(eq(matches.categoryId, categoryId), eq(matches.stage, 'winners-final')))
     const first = await match('winners-final')
     await expect(recordResult({ matchId: first.id, version: first.version, sets: [{ home: 9, away: 7 }] })).rejects.toThrow('programado')
     await schedule(first.id)
@@ -321,6 +325,10 @@ describe('match operations', () => {
 
   it('moves only a scheduled match into progress and records its actual start', async () => {
     await seedBracket()
+    await db
+      .update(matches)
+      .set({ state: 'pending', courtId: null, scheduledStartAt: null, scheduledEndAt: null })
+      .where(and(eq(matches.categoryId, categoryId), eq(matches.stage, 'winners-final')))
     const first = await match('winners-final')
     await expect(startMatch(first.id, first.version)).rejects.toThrow('programado')
     await schedule(first.id)
