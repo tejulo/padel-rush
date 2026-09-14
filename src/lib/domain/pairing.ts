@@ -1,4 +1,5 @@
 import type { Category, Gender } from './types'
+import { isPowerOfTwo } from './bracket'
 
 export interface PairingParticipant {
   id: string
@@ -70,10 +71,6 @@ export function proposeTeams(category: Category, participants: readonly PairingP
 
 function leftOverParticipantIds(sorted: readonly PairingParticipant[]): string[] {
   return sorted.length % 2 === 0 ? [] : [sorted[Math.floor(sorted.length / 2)]!.id]
-}
-
-function isPowerOfTwo(value: number): boolean {
-  return value > 0 && (value & (value - 1)) === 0
 }
 
 export function validateCategoryTeams(
