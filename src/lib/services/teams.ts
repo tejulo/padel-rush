@@ -115,14 +115,19 @@ function materializeDraftTeams(
 function validateDraftTeamMembers(category: CategoryRow['category'], draftTeams: readonly TeamProposal[]): void {
   const participantIds = new Set<string>()
   for (const team of draftTeams) {
-    if (team.memberIds.length !== 2) throw new Error('Cada equipo debe tener exactamente dos participantes')
+    if (team.memberIds.length !== 2 || team.members.length !== 2) {
+      throw new Error('Cada equipo debe tener exactamente dos participantes')
+    }
+    if (team.members.some((member, index) => member.id !== team.memberIds[index])) {
+      throw new Error('Los integrantes del equipo no coinciden')
+    }
     for (const participantId of team.memberIds) {
       if (participantIds.has(participantId)) throw new Error('No se puede repetir un participante')
       participantIds.add(participantId)
     }
 
-    const genders = team.members?.map((member) => member.gender) ?? []
-    if (category === 'mixed' && genders.length === 2 && !(genders.includes('man') && genders.includes('woman'))) {
+    const genders = team.members.map((member) => member.gender)
+    if (category === 'mixed' && !(genders.includes('man') && genders.includes('woman'))) {
       throw new Error('Cada equipo mixto debe tener un hombre y una mujer')
     }
     if (category === 'men' && genders.some((gender) => gender !== 'man')) {
@@ -131,11 +136,6 @@ function validateDraftTeamMembers(category: CategoryRow['category'], draftTeams:
     if (category === 'women' && genders.some((gender) => gender !== 'woman')) {
       throw new Error('Los equipos femeninos solo pueden tener mujeres')
     }
-  }
-
-  const validation = validateCategoryTeams(category, draftTeams.length >= 2 ? draftTeams.slice(0, 2) : draftTeams)
-  if (!validation.ok && !validation.message.includes('potencia de dos') && !validation.message.includes('al menos dos')) {
-    categoryValidationError(validation)
   }
 }
 
@@ -223,12 +223,20 @@ async function validateStoredCategory(
   category: CategoryRow,
 ): Promise<{ teams: TeamWithMembers[]; validation: CategoryValidation }> {
   const storedTeams = await categoryTeams(tx, category.id)
+  const registered = await registeredParticipants(tx, category.id)
   const proposals = storedTeams.map(({ members, ...team }) => ({
     memberIds: members.map((member) => member.id),
     members,
     levelTotal: team.levelTotal,
   }))
-  return { teams: storedTeams, validation: validateCategoryTeams(category.category, proposals) }
+  return {
+    teams: storedTeams,
+    validation: validateCategoryTeams(
+      category.category,
+      proposals,
+      registered.map((participant) => participant.id),
+    ),
+  }
 }
 
 export async function lockTeams(tournamentId: string): Promise<void> {
@@ -268,11 +276,11 @@ export async function lockTeams(tournamentId: string): Promise<void> {
   })
 }
 
-export async function cancelCategory(categoryId: string, version?: number): Promise<void> {
+export async function cancelCategory(categoryId: string, version: number): Promise<void> {
   await db.transaction(async (tx) => {
     const { tournament, category } = await lockedCategory(tx, categoryId)
     if (tournament.state !== 'draft' || category.state !== 'draft') throw new Error('La categoria no admite cambios')
-    if (version !== undefined && version !== category.version) throw new Error('Datos desactualizados')
+    if (!Number.isInteger(version) || version !== category.version) throw new Error('Datos desactualizados')
     await tx
       .update(categories)
       .set({ state: 'cancelled', version: category.version + 1, updatedAt: new Date() })

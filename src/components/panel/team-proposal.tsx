@@ -28,6 +28,7 @@ export function TeamProposal({
   categoryId,
   category,
   version,
+  editable,
   participants,
   proposals,
   savedTeams,
@@ -36,6 +37,7 @@ export function TeamProposal({
   categoryId: string
   category: 'men' | 'women' | 'mixed'
   version: number
+  editable: boolean
   participants: PairingParticipant[]
   proposals: DomainTeamProposal[]
   savedTeams: TeamWithMembers[]
@@ -66,8 +68,6 @@ export function TeamProposal({
   function removeTeam(teamIndex: number) {
     setDraftTeams((current) => current.filter((_, index) => index !== teamIndex))
   }
-
-  const editable = savedTeams.every((team) => !team.locked)
 
   return (
     <article>

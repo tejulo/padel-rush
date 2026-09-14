@@ -9,7 +9,7 @@ export interface PairingParticipant {
 
 export interface TeamProposal {
   memberIds: string[]
-  members?: PairingParticipant[]
+  members: PairingParticipant[]
   levelTotal: number
 }
 
@@ -76,8 +76,15 @@ function isPowerOfTwo(value: number): boolean {
   return value > 0 && (value & (value - 1)) === 0
 }
 
-export function validateCategoryTeams(category: Category, teams: readonly TeamProposal[]): CategoryValidation {
+export function validateCategoryTeams(
+  category: Category,
+  teams: readonly TeamProposal[],
+  expectedParticipantIds?: readonly string[],
+): CategoryValidation {
   if (teams.length < 2) return { ok: false, message: 'La categoria debe tener al menos dos equipos' }
+  if (teams.some((team) => !team.members)) {
+    return { ok: false, message: 'Faltan los integrantes para validar los equipos' }
+  }
   if (!isPowerOfTwo(teams.length)) {
     return { ok: false, message: 'La cantidad de equipos debe ser una potencia de dos' }
   }
@@ -89,7 +96,7 @@ export function validateCategoryTeams(category: Category, teams: readonly TeamPr
     }
 
     const members = team.members
-    if (members && (members.length !== team.memberIds.length || members.some((member, index) => member.id !== team.memberIds[index]))) {
+    if (members.length !== team.memberIds.length || members.some((member, index) => member.id !== team.memberIds[index])) {
       return { ok: false, message: 'Los integrantes del equipo no coinciden' }
     }
 
@@ -100,16 +107,27 @@ export function validateCategoryTeams(category: Category, teams: readonly TeamPr
       participantIds.add(participantId)
     }
 
-    if (members) {
-      const genders = members.map((member) => member.gender)
-      if (category === 'mixed' && !(genders.includes('man') && genders.includes('woman'))) {
-        return { ok: false, message: 'Cada equipo mixto debe tener un hombre y una mujer' }
-      }
-      if (category === 'men' && genders.some((gender) => gender !== 'man')) {
-        return { ok: false, message: 'Los equipos masculinos solo pueden tener hombres' }
-      }
-      if (category === 'women' && genders.some((gender) => gender !== 'woman')) {
-        return { ok: false, message: 'Los equipos femeninos solo pueden tener mujeres' }
+    const genders = members.map((member) => member.gender)
+    if (category === 'mixed' && !(genders.includes('man') && genders.includes('woman'))) {
+      return { ok: false, message: 'Cada equipo mixto debe tener un hombre y una mujer' }
+    }
+    if (category === 'men' && genders.some((gender) => gender !== 'man')) {
+      return { ok: false, message: 'Los equipos masculinos solo pueden tener hombres' }
+    }
+    if (category === 'women' && genders.some((gender) => gender !== 'woman')) {
+      return { ok: false, message: 'Los equipos femeninos solo pueden tener mujeres' }
+    }
+  }
+
+  if (expectedParticipantIds) {
+    const expected = new Set(expectedParticipantIds)
+    const missing = [...expected].filter((participantId) => !participantIds.has(participantId))
+    const extra = [...participantIds].filter((participantId) => !expected.has(participantId))
+    if (missing.length > 0 || extra.length > 0) {
+      return {
+        ok: false,
+        message: 'Los equipos no coinciden con los participantes inscriptos',
+        participantIds: [...missing, ...extra],
       }
     }
   }

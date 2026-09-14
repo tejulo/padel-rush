@@ -53,6 +53,7 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
                   categoryId={category.id}
                   category={category.category}
                   version={category.version}
+                  editable={editable && category.state === 'draft'}
                   participants={registeredParticipants}
                   proposals={proposals}
                   savedTeams={category.teams}
