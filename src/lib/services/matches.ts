@@ -81,9 +81,11 @@ export type MatchBoardEntry = {
   courtName: string | null
   homeTeam: { id: string; name: string } | null
   awayTeam: { id: string; name: string } | null
+  scheduledStartLabel: string | null
 }
 
 export async function listTournamentMatches(tournamentId: string): Promise<MatchBoardEntry[]> {
+  const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1)
   const rows = await db
     .select({
       match: matches,
@@ -103,12 +105,18 @@ export async function listTournamentMatches(tournamentId: string): Promise<Match
 
   const board = new Map<string, MatchBoardEntry>()
   for (const row of rows) {
+    const startLabel = row.match.scheduledStartAt
+      ? new Intl.DateTimeFormat('es-AR', { timeZone: tournament?.timezone ?? 'UTC', hour: '2-digit', minute: '2-digit', hour12: false }).format(
+          row.match.scheduledStartAt,
+        )
+      : null
     const entry = board.get(row.match.id) ?? {
       match: row.match,
       category: row.category,
       courtName: row.courtName,
       homeTeam: null,
       awayTeam: null,
+      scheduledStartLabel: startLabel,
     }
     const team = row.teamId && row.teamName ? { id: row.teamId, name: row.teamName } : null
     if (row.slot === 'a') entry.homeTeam = team

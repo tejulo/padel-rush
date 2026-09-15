@@ -33,12 +33,6 @@ const STAGE_LABELS: Record<string, string> = {
 
 const CATEGORY_LABELS: Record<string, string> = { men: 'Masculino', women: 'Femenino', mixed: 'Mixto' }
 
-function formatTime(date: Date | string | null): string {
-  if (!date) return 'sin horario'
-  const value = date instanceof Date ? date : new Date(date)
-  return value.toISOString().slice(11, 16)
-}
-
 function formatScore(score: unknown): string {
   if (!Array.isArray(score)) return ''
   return score.map((set) => `${(set as { home: number }).home}-${(set as { away: number }).away}`).join(', ')
@@ -60,8 +54,13 @@ export function MatchBoard({
   const [selected, setSelected] = useState<string | null>(null)
   if (matches.length === 0) return <p>No hay partidos generados.</p>
 
+  const sorted = [...matches].sort((left, right) => {
+    const leftTime = left.match.scheduledStartAt?.getTime() ?? Number.MAX_SAFE_INTEGER
+    const rightTime = right.match.scheduledStartAt?.getTime() ?? Number.MAX_SAFE_INTEGER
+    return leftTime - rightTime
+  })
   const groups = new Map<string, MatchBoardEntry[]>()
-  for (const entry of matches) {
+  for (const entry of sorted) {
     const key = courtKey(entry)
     groups.set(key, [...(groups.get(key) ?? []), entry])
   }
@@ -80,7 +79,7 @@ export function MatchBoard({
               return (
                 <li key={match.id}>
                   <p>
-                    {formatTime(match.scheduledStartAt)} - <strong>{CATEGORY_LABELS[entry.category.category]}</strong> -{' '}
+                    {entry.scheduledStartLabel ?? 'sin horario'} - <strong>{CATEGORY_LABELS[entry.category.category]}</strong> -{' '}
                     {STAGE_LABELS[match.stage] ?? match.stage} - {STATE_LABELS[match.state] ?? match.state}
                   </p>
                   <p>
