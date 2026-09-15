@@ -16,14 +16,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [[ -e "$file" ]]; then
+  echo "Backup failed: $file already exists" >&2
+  exit 1
+fi
+
 if command -v pg_dump >/dev/null 2>&1; then
   pg_dump -Fc "$DATABASE_URL" -f "$temporary"
-  mv -n "$temporary" "$file"
 else
   container_url="${COMPOSE_DATABASE_URL:-postgres://padel:padel@postgres:5432/padel_rush}"
   docker compose exec -T postgres pg_dump -Fc "$container_url" >"$temporary"
-  mv -n "$temporary" "$file"
 fi
+
+mv -n "$temporary" "$file"
 
 if [[ ! -f "$file" ]]; then
   echo "Backup failed: $file was not written" >&2

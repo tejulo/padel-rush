@@ -43,6 +43,7 @@ La aplicacion queda en `http://localhost:3000`. El administrador inicial se crea
 3. Define `BOOTSTRAP_ADMIN_USERNAME` y `BOOTSTRAP_ADMIN_PASSWORD` solo para la primera migracion. Luego elimínalas o dejales sin efecto.
 4. Verifica `/login` como healthcheck.
 5. Programa `npm run backup` antes y despues de cada torneo; conserva las copias 30 dias y restaura con `pg_restore -d "$DATABASE_URL" backups/padel-rush-<fecha>.dump`.
+   - Localmente, `backup.sh` usa `pg_dump` si esta instalado o el contenedor de Compose con `COMPOSE_DATABASE_URL` (por defecto `postgres://padel:padel@postgres:5432/padel_rush`).
 
 ## Flujo de operacion
 
