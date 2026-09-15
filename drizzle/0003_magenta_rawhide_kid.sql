@@ -1,0 +1,1 @@
+ALTER TABLE "login_attempts" ALTER COLUMN "ip_address" DROP NOT NULL;
