@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
-import { categories, participants, registrations, users } from '@/lib/db/schema'
+import { categories, participants, registrations, tournaments, users } from '@/lib/db/schema'
 import type { Category, Gender } from '@/lib/domain/types'
 import { hashPassword } from '@/lib/auth/password'
 import { lockTeams, saveTeams } from '@/lib/services/teams'
@@ -22,11 +22,21 @@ const demoParticipants: DemoParticipant[] = [
 ]
 
 async function upsertUser(username: string, password: string, role: 'admin' | 'organizer') {
-  const [existing] = await db.select().from(users).where(eq(users.username, username)).limit(1)
-  if (existing) return existing
+  const passwordHash = await hashPassword(password)
+  const [byName] = await db.select().from(users).where(eq(users.username, username)).limit(1)
+  const [byRole] = role === 'admin' ? await db.select().from(users).where(eq(users.role, 'admin')).limit(1) : []
+  const existing = byName ?? byRole
+  if (existing) {
+    const [updated] = await db
+      .update(users)
+      .set({ username, passwordHash, role, state: 'active', updatedAt: new Date() })
+      .where(eq(users.id, existing.id))
+      .returning()
+    return updated!
+  }
   const [created] = await db
     .insert(users)
-    .values({ id: randomUUID(), username, passwordHash: await hashPassword(password), role, state: 'active' })
+    .values({ id: randomUUID(), username, passwordHash, role, state: 'active' })
     .returning()
   return created!
 }
@@ -42,6 +52,13 @@ export async function seedDemo(): Promise<void> {
 
   await upsertUser(adminUsername, adminPassword, 'admin')
   const organizer = await upsertUser(organizerUsername, organizerPassword, 'organizer')
+
+  const [existingTournament] = await db
+    .select()
+    .from(tournaments)
+    .where(and(eq(tournaments.organizerId, organizer.id), eq(tournaments.name, 'Torneo demostracion')))
+    .limit(1)
+  if (existingTournament) return
 
   const tournament = await createTournament({
     name: 'Torneo demostracion',

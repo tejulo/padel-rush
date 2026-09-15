@@ -51,6 +51,7 @@ function CategorySection({ category }: { category: PublicCategory }) {
       <h2>
         {CATEGORY_LABELS[category.name] ?? category.name} - {STATE_LABELS[category.state] ?? category.state}
       </h2>
+      {category.champion ? <p role="status">Campeon: {category.champion}</p> : null}
       <h3>Parejas</h3>
       <ul>
         {category.teams.map((team) => (

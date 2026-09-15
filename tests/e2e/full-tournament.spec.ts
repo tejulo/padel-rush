@@ -91,4 +91,5 @@ test('runs a two-team category through a reset final to a finished tournament', 
   await publicPage.goto(`/public/${started!.publicToken}`)
   await expect(publicPage.getByRole('heading', { name })).toBeVisible()
   await expect(publicPage.getByText('El torneo ya termino. Consulta los resultados finales.')).toBeVisible()
+  await expect(publicPage.getByText(/Campeon:/)).toBeVisible()
 })

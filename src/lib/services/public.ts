@@ -19,6 +19,7 @@ export interface PublicMatch {
   startLabel: string | null
   homeTeam: string | null
   awayTeam: string | null
+  winner: string | null
   score: string | null
   resultReason: 'absence' | 'retirement' | 'conditional-reset' | null
 }
@@ -27,6 +28,7 @@ export interface PublicCategory {
   id: string
   name: 'men' | 'women' | 'mixed'
   state: string
+  champion: string | null
   teams: PublicTeam[]
   matches: PublicMatch[]
 }
@@ -128,6 +130,7 @@ export async function getPublicTournament(token: string): Promise<PublicTourname
       startLabel: startLabel(row.match.scheduledStartAt, tournament.timezone),
       homeTeam: homeTeam ? (teamNameById.get(homeTeam) ?? null) : null,
       awayTeam: awayTeam ? (teamNameById.get(awayTeam) ?? null) : null,
+      winner: row.match.winnerTeamId ? (teamNameById.get(row.match.winnerTeamId) ?? null) : null,
       score: scoreLabel(row.match.score),
       resultReason: publicReason(row.match.resultReason),
     }
@@ -137,12 +140,20 @@ export async function getPublicTournament(token: string): Promise<PublicTourname
   return {
     name: tournament.name,
     state: tournament.state,
-    categories: categoryRows.map((category) => ({
-      id: category.id,
-      name: category.category,
-      state: category.state,
-      teams: teamsByCategory.get(category.id) ?? [],
-      matches: matchesByCategory.get(category.id) ?? [],
-    })),
+    categories: categoryRows.map((category) => {
+      const categoryMatches = matchesByCategory.get(category.id) ?? []
+      const reset = categoryMatches.find((match) => match.stage === 'grand-final-reset')
+      const resetPlayed = reset?.state === 'completed' || reset?.state === 'forfeit'
+      const titleMatch = resetPlayed ? reset : categoryMatches.find((match) => match.stage === 'grand-final')
+      const champion = titleMatch?.state === 'completed' || titleMatch?.state === 'forfeit' ? titleMatch.winner : null
+      return {
+        id: category.id,
+        name: category.category,
+        state: category.state,
+        champion,
+        teams: teamsByCategory.get(category.id) ?? [],
+        matches: categoryMatches,
+      }
+    }),
   }
 }
