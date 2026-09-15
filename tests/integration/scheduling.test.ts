@@ -317,8 +317,27 @@ describe('scheduling service', () => {
     expect(women.scheduledStartAt!.getTime()).toBeGreaterThanOrEqual(lateStart.getTime() + 90 * 60_000)
   })
 
-  it('rejects a manual schedule that overlaps another match on the same court', async () => {
-    const categoryIds = await seedTournament([simpleCategory('men'), simpleCategory('women')])
+  it('keeps the conditional reset reservation while the grand final is in progress', async () => {
+    const categoryIds = await seedTournament([simpleCategory('men'), simpleCategory('women'), simpleCategory('mixed')])
+    await createBrackets(tournamentId)
+
+    const grandFinal = await matchByStage(categoryIds.get('men')!, 'grand-final')
+    const actualStart = new Date('2026-10-04T09:35:00.000Z')
+    await db
+      .update(matches)
+      .set({ state: 'in_progress', actualStartAt: actualStart, scheduledStartAt: null, scheduledEndAt: null, courtId: null })
+      .where(eq(matches.id, grandFinal.id))
+
+    await replanPendingMatches(tournamentId, new Date('2026-10-04T08:00:00.000Z'))
+
+    const reset = await matchByStage(categoryIds.get('men')!, 'grand-final-reset')
+    expect(reset.state).toBe('cancelled')
+    expect(reset.resultReason).toBe('conditional-reset')
+    expect(reset.courtId).toEqual(expect.any(String))
+    expect(reset.scheduledStartAt!.getTime()).toBeGreaterThanOrEqual(actualStart.getTime() + 90 * 60_000 + 20 * 60_000)
+  })
+
+  it('rejects a manual schedule that overlaps another match on the same court', async () => {    const categoryIds = await seedTournament([simpleCategory('men'), simpleCategory('women')])
     await createBrackets(tournamentId)
 
     const menMatch = await matchByStage(categoryIds.get('men')!, 'winners-final')

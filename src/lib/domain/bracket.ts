@@ -45,12 +45,6 @@ export interface BracketMatch {
   resultReason?: string
 }
 
-export interface BracketResult {
-  matchKey: string
-  winnerTeamId: string
-  loserTeamId: string
-}
-
 const FINAL_STAGES: readonly MatchStage[] = [
   'winners-final',
   'losers-final',
@@ -193,63 +187,4 @@ export function buildBracket(input: BuildBracketInput): BracketMatch[] {
   route(grandFinal, 'loser', resetFinal, 'b')
 
   return [...matches.values()]
-}
-
-function cloneMatch(match: BracketMatch): BracketMatch {
-  return {
-    ...match,
-    slots: {
-      a: { ...match.slots.a, ...(match.slots.a.source ? { source: { ...match.slots.a.source } } : {}) },
-      b: { ...match.slots.b, ...(match.slots.b.source ? { source: { ...match.slots.b.source } } : {}) },
-    },
-    ...(match.winnerTo ? { winnerTo: { ...match.winnerTo } } : {}),
-    ...(match.loserTo ? { loserTo: { ...match.loserTo } } : {}),
-    ...(match.activation ? { activation: { ...match.activation } } : {}),
-  }
-}
-
-function setRoutedTeam(matches: Map<string, BracketMatch>, routeTo: BracketRoute | undefined, teamId: string): void {
-  if (!routeTo) return
-  const destination = findMatch(matches, routeTo.key)
-  destination.slots[routeTo.slot] = {
-    ...destination.slots[routeTo.slot],
-    teamId,
-  }
-  if (destination.state === 'pending' && destination.slots.a.teamId && destination.slots.b.teamId) {
-    destination.active = true
-  }
-}
-
-export function advanceBracket(matches: readonly BracketMatch[], result: BracketResult): BracketMatch[] {
-  const next = new Map(matches.map((match) => [match.key, cloneMatch(match)]))
-  const current = findMatch(next, result.matchKey)
-  if (current.state === 'completed' || current.state === 'forfeit') throw new Error('El partido ya tiene resultado')
-  if (!current.active) throw new Error('El partido no esta activo')
-  if (!current.slots.a.teamId || !current.slots.b.teamId) throw new Error('El partido no tiene dos equipos')
-  if (current.slots.a.teamId === current.slots.b.teamId) throw new Error('Un partido requiere dos equipos distintos')
-  if (![current.slots.a.teamId, current.slots.b.teamId].includes(result.winnerTeamId)) {
-    throw new Error('El ganador no pertenece al partido')
-  }
-  if (![current.slots.a.teamId, current.slots.b.teamId].includes(result.loserTeamId)) {
-    throw new Error('El perdedor no pertenece al partido')
-  }
-  if (result.winnerTeamId === result.loserTeamId) throw new Error('El ganador y el perdedor deben ser distintos')
-
-  current.winnerTeamId = result.winnerTeamId
-  current.loserTeamId = result.loserTeamId
-  current.state = 'completed'
-  setRoutedTeam(next, current.winnerTo, result.winnerTeamId)
-  setRoutedTeam(next, current.loserTo, result.loserTeamId)
-
-  for (const destination of next.values()) {
-    if (!destination.activation || destination.activation.matchKey !== current.key) continue
-    const triggerTeamId = current.slots[destination.activation.winnerSlot].teamId
-    if (triggerTeamId === result.winnerTeamId) {
-      destination.active = true
-      destination.state = 'pending'
-      destination.resultReason = undefined
-    }
-  }
-
-  return [...next.values()]
 }

@@ -59,3 +59,7 @@ La aplicacion queda en `http://localhost:3000`. El administrador inicial se crea
 - Final de ganadores, final de perdedores, gran final y su reinicio: mejor de tres sets con tie-break en 6-6 y punto de oro.
 - Doble eliminacion: la segunda derrota elimina; si la pareja del cuadro de perdedores gana la gran final, se juega un reinicio.
 - Una persona puede competir en su categoria propia y en mixto, nunca en dos parejas de la misma categoria.
+
+## Notas de esquema
+
+- El valor `completed` sigue presente en los enums de estado de torneo y categoria como legado de una version anterior; la aplicacion usa `finished` para el cierre y no escribe `completed`. Se mantiene para evitar una migracion de enum riesgosa.

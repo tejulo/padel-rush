@@ -165,6 +165,7 @@ export async function moveMatchAction(_previousState: ActionState, formData: For
     if (!startsAt) throw new Error('Falta la hora del partido')
     await moveMatch({
       matchId,
+      version: versionValue(formData),
       tournamentId: context.tournament.id,
       courtId: value(formData, 'courtId'),
       startsAt: tournamentLocalToInstant(context.tournament, startsAt),

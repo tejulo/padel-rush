@@ -19,11 +19,14 @@ import { makeTournamentInput } from '@/lib/test/factories'
 import { createBrackets } from '@/lib/services/brackets'
 import {
   clearResult,
+  listTournamentMatches,
+  moveMatch,
   recordForfeit,
   recordResult,
   startMatch,
   substitutePlayer,
 } from '@/lib/services/matches'
+import { tournamentInstant } from '@/lib/services/scheduling'
 import { createTournament } from '@/lib/services/tournaments'
 
 vi.mock('@/lib/auth/guards', () => ({ requireUser: vi.fn(), requireRole: vi.fn() }))
@@ -34,6 +37,7 @@ describe('match operations', () => {
   let categoryId = ''
   let teamIds: string[] = []
   let participantIds: string[] = []
+  let enabledCourtId = ''
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -68,6 +72,7 @@ describe('match operations', () => {
   async function seedBracket(teamCount = 2): Promise<void> {
     const tournament = await createTournament(makeTournamentInput())
     tournamentId = tournament.id
+    enabledCourtId = tournament.courts.find((court) => court.enabled)!.id
     const categoryRows = await db
       .select()
       .from(categories)
@@ -502,5 +507,80 @@ describe('match operations', () => {
     invalid.set('version', String(second.version))
     invalid.set('sets', JSON.stringify([{ home: 8, away: 7 }]))
     await expect(recordResultAction({}, invalid)).resolves.toEqual({ error: 'El marcador no es valido' })
+  })
+
+  it('flags a match scheduled past the tournament end limit without adding a column', async () => {
+    await seedBracket()
+    const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId))
+    const first = await match('winners-final')
+    await db
+      .update(matches)
+      .set({
+        state: 'scheduled',
+        courtId: enabledCourtId,
+        scheduledStartAt: tournamentInstant(tournament!, tournament!.endsAt),
+        scheduledEndAt: new Date(tournamentInstant(tournament!, tournament!.endsAt).getTime() + 90 * 60_000),
+      })
+      .where(eq(matches.id, first.id))
+
+    const board = await listTournamentMatches(tournamentId)
+    const entry = board.find((row) => row.match.id === first.id)!
+    expect(entry.afterEndWarning).toBe(true)
+    expect(entry.match.scheduledEndAt!.getTime()).toBeGreaterThan(tournamentInstant(tournament!, tournament!.endsAt).getTime())
+  })
+
+  it('rejects stale move versions and stamps the actual start on a direct result', async () => {
+    await seedBracket()
+    const first = await match('winners-final')
+    await schedule(first.id)
+    await expect(
+      moveMatch({
+        matchId: first.id,
+        version: first.version + 1,
+        tournamentId,
+        courtId: enabledCourtId,
+        startsAt: tournamentInstant((await db.select().from(tournaments).where(eq(tournaments.id, tournamentId)))[0]!, '10:00'),
+      }),
+    ).rejects.toThrow('Datos desactualizados')
+
+    const completed = await recordResult({
+      matchId: first.id,
+      version: first.version,
+      sets: [{ home: 6, away: 4 }, { home: 6, away: 4 }],
+    })
+    expect(completed.actualStartAt).toBeInstanceOf(Date)
+  })
+
+  it('excludes the unactivated conditional reset from the operator board', async () => {
+    await seedBracket()
+    const reset = await match('grand-final-reset')
+    const board = await listTournamentMatches(tournamentId)
+    expect(board.some((entry) => entry.match.id === reset.id)).toBe(false)
+  })
+
+  it('exposes eligible substitution teams and category replacement candidates', async () => {
+    await seedBracket()
+    const replacement = await db
+      .insert(participants)
+      .values({ id: 'board-replacement', tournamentId, name: 'Reemplazo tablero', gender: 'man', level: 4 })
+      .returning()
+    await db.insert(registrations).values({ id: 'registration-board-replacement', participantId: replacement[0]!.id, categoryId })
+    await db.update(tournaments).set({ state: 'in_progress' }).where(eq(tournaments.id, tournamentId))
+    await db.update(categories).set({ state: 'in_progress' }).where(eq(categories.id, categoryId))
+
+    const board = await listTournamentMatches(tournamentId)
+    const entry = board.find((row) => row.homeTeam?.id === teamIds[0])!
+    expect(entry.homeTeam).toMatchObject({
+      eligibleForSubstitution: true,
+      members: expect.arrayContaining([expect.objectContaining({ id: participantIds[0] })]),
+    })
+    expect(entry.replacementCandidates).toEqual(expect.arrayContaining([expect.objectContaining({ id: replacement[0]!.id })]))
+
+    const final = await match('winners-final')
+    await db.update(matches).set({ state: 'in_progress' }).where(eq(matches.id, final.id))
+    const afterStart = await listTournamentMatches(tournamentId)
+    expect(afterStart.find((row) => row.homeTeam?.id === teamIds[0])!.homeTeam).toMatchObject({
+      eligibleForSubstitution: false,
+    })
   })
 })

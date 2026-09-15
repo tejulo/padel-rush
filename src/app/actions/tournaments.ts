@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/guards'
 import {
   assertTournamentOwner,
+  cancelTournament,
   createTournament,
+  deleteTournament,
   getTournament,
   regeneratePublicToken,
   updateTournament,
@@ -122,4 +124,52 @@ export async function regeneratePublicLinkAction(_previousState: ActionState, fo
 
   revalidatePath(`/tournaments/${id}`)
   return { success: 'Enlace publico regenerado' }
+}
+
+function versionFrom(formData: FormData): number | null {
+  const id = value(formData, 'id')
+  const version = numberValue(formData, 'version')
+  return id && version !== undefined ? version : null
+}
+
+export async function cancelTournamentAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser()
+  const id = value(formData, 'id')
+  const version = versionFrom(formData)
+  if (!id || version === null) return { error: 'Faltan datos de version' }
+
+  const tournament = await getTournament(id)
+  if (!tournament) return { error: 'Torneo no encontrado' }
+
+  try {
+    assertTournamentOwner(user, tournament)
+    await cancelTournament(id, version)
+  } catch (error) {
+    return errorState(error)
+  }
+
+  revalidatePath('/')
+  revalidatePath(`/tournaments/${id}`)
+  revalidatePath(`/tournaments/${id}/matches`)
+  return { success: 'Torneo cancelado' }
+}
+
+export async function deleteTournamentAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser()
+  const id = value(formData, 'id')
+  const version = versionFrom(formData)
+  if (!id || version === null) return { error: 'Faltan datos de version' }
+
+  const tournament = await getTournament(id)
+  if (!tournament) return { error: 'Torneo no encontrado' }
+
+  try {
+    assertTournamentOwner(user, tournament)
+    await deleteTournament(id, version, user)
+  } catch (error) {
+    return errorState(error)
+  }
+
+  revalidatePath('/')
+  redirect('/')
 }

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
-import { categories, participants, registrations, teams, teamMembers, tournaments, users } from '@/lib/db/schema'
+import { categories, courts, participants, registrations, teams, teamMembers, tournaments, users } from '@/lib/db/schema'
 import { resetDatabase } from '@/lib/test/database'
 import { makeTournamentInput } from '@/lib/test/factories'
 import { createBrackets } from '@/lib/services/brackets'
 import { getPublicTournament } from '@/lib/services/public'
-import { createTournament, regeneratePublicToken } from '@/lib/services/tournaments'
+import { createTournament, cancelTournament, regeneratePublicToken } from '@/lib/services/tournaments'
 
 describe('public tournament projection', () => {
   let tournamentId = ''
@@ -73,6 +73,8 @@ describe('public tournament projection', () => {
     const projection = await getPublicTournament(token)
     expect(projection).not.toBeNull()
     expect(projection!.name).toBe('Sabado de padel')
+    expect(projection!.courts.map((court) => court.name)).toEqual(['Cancha 1', 'Cancha 2', 'Cancha 3'])
+    expect(projection!.courts.every((court) => court.enabled)).toBe(true)
     expect(projection!.categories).toHaveLength(3)
     expect(projection!.categories.filter((entry) => entry.state === 'cancelled')).toHaveLength(2)
     const category = projection!.categories.find((entry) => entry.name === 'men')!
@@ -83,6 +85,31 @@ describe('public tournament projection', () => {
     expect(category.champion).toBeNull()
     expect(JSON.stringify(projection)).not.toContain('password')
     expect(JSON.stringify(projection)).not.toContain('level')
+  })
+
+  it('exposes the disabled court state', async () => {
+    const [court] = await db
+      .select()
+      .from(courts)
+      .where(and(eq(courts.tournamentId, tournamentId), eq(courts.position, 3)))
+    await db.update(courts).set({ enabled: false }).where(eq(courts.id, court!.id))
+
+    const projection = await getPublicTournament(token)
+    expect(projection!.courts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Cancha 1', enabled: true }),
+        expect.objectContaining({ name: 'Cancha 3', enabled: false }),
+      ]),
+    )
+  })
+
+  it('leaves unfinished categories without a champion after a cancellation', async () => {
+    const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId))
+    await cancelTournament(tournamentId, tournament!.version)
+
+    const projection = await getPublicTournament(token)
+    expect(projection!.state).toBe('cancelled')
+    expect(projection!.categories.map((category) => category.champion)).toEqual([null, null, null])
   })
 
   it('does not expose a regenerated public token', async () => {

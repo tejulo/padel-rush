@@ -3,9 +3,11 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { requestIp } from '@/lib/auth/request-ip'
-import { setSessionCookie, signIn, signOut } from '@/lib/auth/session'
+import { INVALID_CREDENTIALS_MESSAGE, setSessionCookie, signIn, signOut } from '@/lib/auth/session'
 
-export async function signInAction(formData: FormData) {
+export type LoginState = { error?: string }
+
+export async function signInAction(_previousState: LoginState, formData: FormData): Promise<LoginState> {
   const headerStore = await headers()
   const result = await signIn(
     String(formData.get('username') ?? ''),
@@ -13,7 +15,7 @@ export async function signInAction(formData: FormData) {
     requestIp(headerStore),
   )
 
-  if (!result.ok) return
+  if (!result.ok) return { error: INVALID_CREDENTIALS_MESSAGE }
 
   await setSessionCookie(result.token)
   redirect('/')

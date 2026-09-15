@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { and, eq, ne } from 'drizzle-orm'
 
 vi.mock('@/lib/auth/guards', () => ({ requireRole: vi.fn(), requireUser: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -7,12 +8,17 @@ vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
 import { db } from '@/lib/db/client'
 import { resetDatabase } from '@/lib/test/database'
 import { makeTournamentInput } from '@/lib/test/factories'
-import { users } from '@/lib/db/schema'
+import { categories, matches, participants, registrations, teamMembers, teams, tournaments, users } from '@/lib/db/schema'
 import { requireRole, requireUser } from '@/lib/auth/guards'
-import { createTournamentAction } from '@/app/actions/tournaments'
+import { cancelTournamentAction, createTournamentAction, deleteTournamentAction } from '@/app/actions/tournaments'
+import { createBrackets } from '@/lib/services/brackets'
+import { recordResult } from '@/lib/services/matches'
 import {
   assertTournamentOwner,
+  cancelTournament,
   createTournament,
+  deleteTournament,
+  getCategories,
   getTournament,
   listActiveOrganizers,
   listTournaments,
@@ -178,5 +184,136 @@ describe('tournament management', () => {
     const created = await listTournaments({ id: 'admin-id', role: 'admin' })
     expect(created).toHaveLength(1)
     expect(created[0]?.organizerId).toBe('organizer-id')
+  })
+
+  it('rejects an invalid timezone at create and update time', async () => {
+    await expect(createTournament(makeTournamentInput({ timezone: 'Mars/Olympus' }))).rejects.toThrow(
+      'La zona horaria no es valida',
+    )
+    const tournament = await createTournament(makeTournamentInput())
+    await expect(
+      updateTournament({ id: tournament.id, version: tournament.version, timezone: 'Mars/Olympus' }),
+    ).rejects.toThrow('La zona horaria no es valida')
+  })
+
+  it('cancels an in-progress tournament keeping results and leaving the champion undecided', async () => {
+    const tournament = await createTournament(makeTournamentInput())
+    const categoryRows = await getCategories(tournament.id)
+    const menCategory = categoryRows.find((category) => category.category === 'men')!
+    await db
+      .update(categories)
+      .set({ state: 'cancelled', version: 2 })
+      .where(and(eq(categories.tournamentId, tournament.id), ne(categories.id, menCategory.id)))
+
+    const participantRows = await db
+      .insert(participants)
+      .values(
+        Array.from({ length: 4 }, (_, index) => ({
+          id: `participant-${index + 1}`,
+          tournamentId: tournament.id,
+          name: `Jugador ${index + 1}`,
+          gender: 'man' as const,
+          level: 3,
+        })),
+      )
+      .returning()
+    await db.insert(registrations).values(
+      participantRows.map((participant) => ({ id: `registration-${participant.id}`, participantId: participant.id, categoryId: menCategory.id })),
+    )
+    const teamRows = await db
+      .insert(teams)
+      .values(
+        Array.from({ length: 2 }, (_, index) => ({
+          id: `team-${index + 1}`,
+          categoryId: menCategory.id,
+          name: `Pareja ${index + 1}`,
+          levelTotal: 6,
+          locked: true,
+          lockedAt: new Date(),
+        })),
+      )
+      .returning()
+    await db.insert(teamMembers).values(
+      teamRows.flatMap((team, index) =>
+        participantRows.slice(index * 2, index * 2 + 2).map((participant) => ({
+          id: `member-${team.id}-${participant.id}`,
+          teamId: team.id,
+          participantId: participant.id,
+          categoryId: menCategory.id,
+        })),
+      ),
+    )
+    await db.update(categories).set({ state: 'locked' }).where(eq(categories.id, menCategory.id))
+    await createBrackets(tournament.id)
+    const [final] = await db
+      .select()
+      .from(matches)
+      .where(and(eq(matches.categoryId, menCategory.id), eq(matches.stage, 'winners-final')))
+    await db.update(matches).set({ state: 'scheduled' }).where(eq(matches.id, final!.id))
+    await recordResult({ matchId: final!.id, version: final!.version, sets: [{ home: 6, away: 4 }, { home: 6, away: 4 }] })
+    const started = (await getTournament(tournament.id))!
+
+    await cancelTournament(tournament.id, started.version)
+
+    const cancelled = await getTournament(tournament.id)
+    expect(cancelled).toMatchObject({ state: 'cancelled', version: started.version + 1 })
+    expect(cancelled!.updatedAt).toBeInstanceOf(Date)
+    await expect(getCategories(tournament.id)).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: menCategory.id, state: 'in_progress' })]),
+    )
+    const [finishedFinal] = await db.select().from(matches).where(eq(matches.id, final!.id))
+    expect(finishedFinal).toMatchObject({ state: 'completed', winnerTeamId: teamRows[0]!.id })
+  })
+
+  it('rejects a cancellation from a finished tournament or with a stale version', async () => {
+    const tournament = await createTournament(makeTournamentInput())
+    await expect(cancelTournament(tournament.id, tournament.version + 1)).rejects.toThrow('Datos desactualizados')
+    await db.update(tournaments).set({ state: 'finished' }).where(eq(tournaments.id, tournament.id))
+    const current = (await getTournament(tournament.id))!
+    await expect(cancelTournament(tournament.id, current.version)).rejects.toThrow('no se puede cancelar')
+  })
+
+  it('does not let another organizer cancel a tournament through the action', async () => {
+    const tournament = await createTournament(makeTournamentInput())
+    vi.mocked(requireUser).mockResolvedValue({ id: 'other-organizer-id', username: 'organizador2', role: 'organizer' })
+    const formData = new FormData()
+    formData.set('id', tournament.id)
+    formData.set('version', String(tournament.version))
+
+    await expect(cancelTournamentAction({}, formData)).resolves.toEqual({ error: 'No tienes permisos para este torneo' })
+    await expect(getTournament(tournament.id)).resolves.toMatchObject({ state: 'draft' })
+  })
+
+  it('lets an organizer delete only their own draft and an admin only finished or cancelled tournaments', async () => {
+    const organizer = { id: 'organizer-id', role: 'organizer' as const }
+    const admin = { id: 'admin-id', role: 'admin' as const }
+    const draft = await createTournament(makeTournamentInput())
+    await expect(deleteTournament(draft.id, draft.version, organizer)).resolves.toBeUndefined()
+    await expect(getTournament(draft.id)).resolves.toBeNull()
+
+    const inProgress = await createTournament(makeTournamentInput({ name: 'En juego' }))
+    await db.update(tournaments).set({ state: 'in_progress' }).where(eq(tournaments.id, inProgress.id))
+    const current = (await getTournament(inProgress.id))!
+    await expect(deleteTournament(inProgress.id, current.version, organizer)).rejects.toThrow('borrador')
+    await expect(deleteTournament(inProgress.id, current.version, admin)).rejects.toThrow('finalizados o cancelados')
+    await expect(deleteTournament(inProgress.id, current.version, { id: 'other-organizer-id', role: 'organizer' })).rejects.toThrow(
+      'No tienes permisos',
+    )
+
+    await db.update(tournaments).set({ state: 'cancelled', version: current.version + 1 }).where(eq(tournaments.id, inProgress.id))
+    const cancelled = (await getTournament(inProgress.id))!
+    await expect(deleteTournament(inProgress.id, cancelled.version, admin)).resolves.toBeUndefined()
+    await expect(getTournament(inProgress.id)).resolves.toBeNull()
+  })
+
+  it('rejects a cross-owner deletion through the action', async () => {
+    const tournament = await createTournament(makeTournamentInput())
+    vi.mocked(requireUser).mockResolvedValue({ id: 'other-organizer-id', username: 'organizador2', role: 'organizer' })
+    const formData = new FormData()
+    formData.set('id', tournament.id)
+    formData.set('version', String(tournament.version))
+
+    await expect(deleteTournamentAction({}, formData)).resolves.toEqual({ error: 'No tienes permisos para este torneo' })
+    await expect(getTournament(tournament.id)).resolves.not.toBeNull()
   })
 })

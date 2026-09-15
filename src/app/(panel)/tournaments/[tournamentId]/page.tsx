@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/auth/guards'
 import { PublicLink } from '@/components/panel/public-link'
+import { TournamentActions } from '@/components/panel/tournament-actions'
 import { TournamentForm } from '@/components/panel/tournament-form'
 import { assertTournamentOwner, getCategories, getTournament } from '@/lib/services/tournaments'
 
@@ -57,6 +58,13 @@ export default async function TournamentPage({ params }: { params: Promise<{ tou
       )}
       <h2>Configuracion</h2>
       <TournamentForm tournament={tournament} />
+      <h2>Acciones</h2>
+      <TournamentActions
+        tournamentId={tournament.id}
+        version={tournament.version}
+        state={tournament.state}
+        isAdmin={user.role === 'admin'}
+      />
     </section>
   )
 }

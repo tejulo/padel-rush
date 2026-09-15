@@ -179,4 +179,25 @@ describe('scheduleReadyMatches', () => {
     expect(reset.startsAt).toEqual(at(10, 50))
     expect(reset.endsAt).toEqual(at(12, 20))
   })
+
+  it('keeps the conditional reset reservation when the grand final is in progress', () => {
+    const schedule = scheduleReadyMatches(
+      input({
+        courts: [{ id: 'c1', enabled: true }],
+        matches: [],
+        conditionalResets: [
+          {
+            id: 'gf-reset',
+            afterMatchId: 'gf',
+            fixedInterval: { startsAt: at(9, 35), endsAt: at(11, 5) },
+          },
+        ],
+      }),
+    )
+
+    const reset = byId(schedule, 'gf-reset')
+    expect(reset.conditional).toBe(true)
+    expect(reset.startsAt).toEqual(at(11, 25))
+    expect(reset.endsAt).toEqual(at(12, 55))
+  })
 })

@@ -152,7 +152,11 @@ async function replanWith(database: SchedulingDatabase, tournamentId: string, fr
     .filter((match) => match.state === 'cancelled' && match.resultReason === 'conditional-reset')
     .flatMap((match) => {
       const grandFinal = matchRows.find((row) => row.categoryId === match.categoryId && row.stage === 'grand-final')
-      return grandFinal ? [{ id: match.id, afterMatchId: grandFinal.id }] : []
+      if (!grandFinal) return []
+      const fixed = FIXED_STATES.includes(grandFinal.state)
+        ? fixedInterval(grandFinal, tournament.shortMatchMinutes, tournament.longMatchMinutes)
+        : null
+      return [{ id: match.id, afterMatchId: grandFinal.id, ...(fixed ? { fixedInterval: fixed } : {}) }]
     })
 
   const ready: SchedulingMatch[] = matchRows

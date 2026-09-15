@@ -1,11 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
-import { sessions, users } from '@/lib/db/schema'
+import { loginAttempts, sessions, users } from '@/lib/db/schema'
 import { hashPassword } from '@/lib/auth/password'
-import { signIn } from '@/lib/auth/session'
+import { signIn, pruneAuthData } from '@/lib/auth/session'
 import { bootstrapAdmin } from '@/lib/services/users'
 import { resetDatabase } from '@/lib/test/database'
+
+vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()), cookies: vi.fn() }))
+vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
 
 const password = 'padel-seguro1'
 const bootstrapUsername = 'admininicial'
@@ -115,5 +118,31 @@ describe('authentication', () => {
 
     expect(admins.filter((user) => user.role === 'admin')).toHaveLength(1)
     expect(results.every((result) => result.id === admins.find((user) => user.role === 'admin')?.id)).toBe(true)
+  })
+
+  it('returns the invalid-credentials message through the sign-in action', async () => {
+    const { signInAction } = await import('@/app/actions/auth')
+    const formData = new FormData()
+    formData.set('username', 'organizador1')
+    formData.set('password', 'incorrecta-larga')
+
+    await expect(signInAction({}, formData)).resolves.toEqual({ error: 'Usuario o contrasena invalidos' })
+  })
+
+  it('prunes expired sessions and old login attempts', async () => {
+    const result = await signIn('organizador1', password, '127.0.0.1')
+    expect(result.ok).toBe(true)
+    const [session] = await db.select().from(sessions).where(eq(sessions.userId, 'organizer-id'))
+    await db.update(sessions).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(sessions.id, session!.id))
+    await db.insert(loginAttempts).values({
+      id: 'old-attempt',
+      username: 'organizador1',
+      attemptedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+    })
+
+    await pruneAuthData()
+
+    await expect(db.select().from(sessions).where(eq(sessions.userId, 'organizer-id'))).resolves.toEqual([])
+    await expect(db.select().from(loginAttempts).where(eq(loginAttempts.id, 'old-attempt'))).resolves.toEqual([])
   })
 })

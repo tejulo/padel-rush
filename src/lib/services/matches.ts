@@ -75,36 +75,92 @@ async function lockedMatchContext(tx: MatchDatabase, matchId: string): Promise<M
   return { match, category, tournament }
 }
 
+export type MatchBoardTeam = {
+  id: string
+  name: string
+  version: number
+  eligibleForSubstitution: boolean
+  members: { id: string; name: string }[]
+}
+
 export type MatchBoardEntry = {
   match: Match
   category: typeof categories.$inferSelect
   courtName: string | null
-  homeTeam: { id: string; name: string } | null
-  awayTeam: { id: string; name: string } | null
+  homeTeam: MatchBoardTeam | null
+  awayTeam: MatchBoardTeam | null
   scheduledStartLabel: string | null
+  afterEndWarning: boolean
+  replacementCandidates: { id: string; name: string }[]
 }
+
+const STARTED_MATCH_STATES: readonly Match['state'][] = ['in_progress', 'completed', 'forfeit']
 
 export async function listTournamentMatches(tournamentId: string): Promise<MatchBoardEntry[]> {
   const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1)
-  const rows = await db
-    .select({
-      match: matches,
-      category: categories,
-      courtName: courts.name,
-      slot: matchSlots.slot,
-      teamId: teams.id,
-      teamName: teams.name,
-    })
-    .from(matches)
-    .innerJoin(categories, eq(matches.categoryId, categories.id))
-    .leftJoin(courts, eq(matches.courtId, courts.id))
-    .leftJoin(matchSlots, eq(matchSlots.matchId, matches.id))
-    .leftJoin(teams, eq(matchSlots.teamId, teams.id))
+  const categoryRows = await db
+    .select({ id: categories.id })
+    .from(categories)
     .where(eq(categories.tournamentId, tournamentId))
-    .orderBy(asc(categories.category), asc(matches.round), asc(matches.position), asc(matchSlots.slot))
+  const categoryIds = categoryRows.map((category) => category.id)
+  const [rows, memberRows, registeredRows] = await Promise.all([
+    db
+      .select({
+        match: matches,
+        category: categories,
+        courtName: courts.name,
+        slot: matchSlots.slot,
+        teamId: teams.id,
+        teamName: teams.name,
+        teamVersion: teams.version,
+        teamLocked: teams.locked,
+        teamSubstitutionUsed: teams.substitutionUsed,
+      })
+      .from(matches)
+      .innerJoin(categories, eq(matches.categoryId, categories.id))
+      .leftJoin(courts, eq(matches.courtId, courts.id))
+      .leftJoin(matchSlots, eq(matchSlots.matchId, matches.id))
+      .leftJoin(teams, eq(matchSlots.teamId, teams.id))
+      .where(eq(categories.tournamentId, tournamentId))
+      .orderBy(asc(categories.category), asc(matches.round), asc(matches.position), asc(matchSlots.slot)),
+    categoryIds.length
+      ? db
+          .select({ teamId: teamMembers.teamId, participantId: participants.id, name: participants.name })
+          .from(teamMembers)
+          .innerJoin(participants, eq(teamMembers.participantId, participants.id))
+          .where(inArray(teamMembers.categoryId, categoryIds))
+          .orderBy(asc(teamMembers.teamId), asc(participants.name))
+      : [],
+    categoryIds.length
+      ? db
+          .select({ categoryId: registrations.categoryId, participantId: participants.id, name: participants.name })
+          .from(registrations)
+          .innerJoin(participants, eq(registrations.participantId, participants.id))
+          .where(inArray(registrations.categoryId, categoryIds))
+          .orderBy(asc(participants.name))
+      : [],
+  ])
+
+  const membersByTeam = new Map<string, { id: string; name: string }[]>()
+  for (const member of memberRows) {
+    membersByTeam.set(member.teamId, [...(membersByTeam.get(member.teamId) ?? []), { id: member.participantId, name: member.name }])
+  }
+  const candidatesByCategory = new Map<string, { id: string; name: string }[]>()
+  for (const registered of registeredRows) {
+    candidatesByCategory.set(registered.categoryId, [
+      ...(candidatesByCategory.get(registered.categoryId) ?? []),
+      { id: registered.participantId, name: registered.name },
+    ])
+  }
+
+  const startedTeamIds = new Set(
+    rows.filter((row) => row.teamId && STARTED_MATCH_STATES.includes(row.match.state)).map((row) => row.teamId!),
+  )
+  const endLimit = tournament ? tournamentInstant(tournament, tournament.endsAt) : null
 
   const board = new Map<string, MatchBoardEntry>()
   for (const row of rows) {
+    if (row.match.state === 'cancelled' && row.match.resultReason === 'conditional-reset') continue
     const startLabel = row.match.scheduledStartAt
       ? new Intl.DateTimeFormat('es-AR', {
           timeZone: tournament?.timezone ?? 'UTC',
@@ -120,8 +176,24 @@ export async function listTournamentMatches(tournamentId: string): Promise<Match
       homeTeam: null,
       awayTeam: null,
       scheduledStartLabel: startLabel,
+      afterEndWarning: Boolean(endLimit && row.match.scheduledEndAt && row.match.scheduledEndAt.getTime() > endLimit.getTime()),
+      replacementCandidates: candidatesByCategory.get(row.match.categoryId) ?? [],
     }
-    const team = row.teamId && row.teamName ? { id: row.teamId, name: row.teamName } : null
+    const team: MatchBoardTeam | null =
+      row.teamId && row.teamName
+        ? {
+            id: row.teamId,
+            name: row.teamName,
+            version: row.teamVersion!,
+            eligibleForSubstitution:
+              tournament?.state === 'in_progress' &&
+              entry.category.state === 'in_progress' &&
+              Boolean(row.teamLocked) &&
+              !row.teamSubstitutionUsed &&
+              !startedTeamIds.has(row.teamId),
+            members: membersByTeam.get(row.teamId) ?? [],
+          }
+        : null
     if (row.slot === 'a') entry.homeTeam = team
     if (row.slot === 'b') entry.awayTeam = team
     board.set(row.match.id, entry)
@@ -134,6 +206,7 @@ export interface MoveMatchInput {
   courtId: string
   startsAt: Date
   tournamentId: string
+  version: number
 }
 
 export async function moveMatch(input: MoveMatchInput): Promise<Match> {
@@ -153,6 +226,7 @@ export async function moveMatch(input: MoveMatchInput): Promise<Match> {
     if (match.state !== 'pending' && match.state !== 'scheduled') {
       throw new Error('Solo se pueden mover partidos pendientes')
     }
+    staleVersion(input.version, match.version)
 
     const [court] = await tx
       .select()
@@ -180,7 +254,7 @@ export async function moveMatch(input: MoveMatchInput): Promise<Match> {
         version: sql<number>`${matches.version} + 1`,
         updatedAt: new Date(),
       })
-      .where(and(eq(matches.id, input.matchId), inArray(matches.state, ['pending', 'scheduled'])))
+      .where(and(eq(matches.id, input.matchId), eq(matches.version, input.version), inArray(matches.state, ['pending', 'scheduled'])))
       .returning()
     if (!updated) throw new Error('Datos desactualizados')
     return updated
@@ -326,6 +400,7 @@ async function finishMatch(
       resultReason,
       winnerTeamId,
       loserTeamId,
+      actualStartAt: context.match.actualStartAt ?? now,
       actualEndAt: now,
       version: sql<number>`${matches.version} + 1`,
       updatedAt: now,

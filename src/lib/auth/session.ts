@@ -1,13 +1,14 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { and, eq, gt, isNull } from 'drizzle-orm'
+import { and, eq, gt, isNull, lt } from 'drizzle-orm'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/db/client'
-import { sessions, users } from '@/lib/db/schema'
+import { loginAttempts, sessions, users } from '@/lib/db/schema'
 import { validateCredentials, verifyPassword } from '@/lib/auth/password'
 import { isLoginLocked, recordLoginAttempt } from '@/lib/auth/rate-limit'
 
 export const SESSION_COOKIE_NAME = 'padel_rush_session'
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+export const AUTH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 export const INVALID_CREDENTIALS_MESSAGE = 'Usuario o contrasena invalidos'
 
 export type Role = 'admin' | 'organizer'
@@ -24,6 +25,14 @@ export type SignInResult =
 
 function hashSessionToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
+}
+
+export async function pruneAuthData(): Promise<void> {
+  const cutoff = new Date(Date.now() - AUTH_RETENTION_MS)
+  await Promise.all([
+    db.delete(sessions).where(lt(sessions.expiresAt, new Date())),
+    db.delete(loginAttempts).where(lt(loginAttempts.attemptedAt, cutoff)),
+  ])
 }
 
 export async function createSession(userId: string): Promise<string> {
@@ -51,6 +60,7 @@ export async function setSessionCookie(token: string): Promise<void> {
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
+  void pruneAuthData().catch(() => {})
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value
   if (!token) return null
 
@@ -72,6 +82,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 }
 
 export async function signIn(username: string, password: string, ipAddress: string | null = null): Promise<SignInResult> {
+  void pruneAuthData().catch(() => {})
   if (await isLoginLocked(username, ipAddress)) {
     return { ok: false, reason: 'locked', message: INVALID_CREDENTIALS_MESSAGE }
   }

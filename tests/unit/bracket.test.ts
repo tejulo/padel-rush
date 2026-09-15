@@ -1,15 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  advanceBracket,
-  buildBracket,
-  isFinalStage,
-  isPowerOfTwo,
-  type BracketMatch,
-} from '@/lib/domain/bracket'
-
-function result(matchKey: string, winnerTeamId: string, loserTeamId: string) {
-  return { matchKey, winnerTeamId, loserTeamId }
-}
+import { buildBracket, isFinalStage, isPowerOfTwo, type BracketMatch } from '@/lib/domain/bracket'
 
 function match(matches: BracketMatch[], key: string): BracketMatch {
   const found = matches.find((entry) => entry.key === key)
@@ -66,36 +56,6 @@ describe('double-elimination brackets', () => {
       a: { source: { key: 'W3-1', outcome: 'loser' } },
       b: { source: { key: 'L3-1', outcome: 'winner' } },
     })
-  })
-
-  it('activates the reset only when the losers-bracket champion wins the grand final', () => {
-    let matches = buildBracket({ categoryId: 'men', teamIds: ['a', 'b', 'c', 'd'] })
-
-    expect(match(matches, 'GF-reset')).toMatchObject({ active: false, state: 'cancelled' })
-    matches = advanceBracket(matches, result('W1-1', 'a', 'b'))
-    matches = advanceBracket(matches, result('W1-2', 'c', 'd'))
-    matches = advanceBracket(matches, result('W2-1', 'a', 'c'))
-    matches = advanceBracket(matches, result('L1-1', 'b', 'd'))
-    matches = advanceBracket(matches, result('L2-1', 'b', 'c'))
-    matches = advanceBracket(matches, result('GF-1', 'b', 'a'))
-
-    expect(match(matches, 'GF-reset')).toMatchObject({
-      active: true,
-      state: 'pending',
-      slots: { a: { teamId: 'b' }, b: { teamId: 'a' } },
-    })
-  })
-
-  it('does not activate the reset when the winners-bracket champion wins', () => {
-    let matches = buildBracket({ categoryId: 'men', teamIds: ['a', 'b', 'c', 'd'] })
-    matches = advanceBracket(matches, result('W1-1', 'a', 'b'))
-    matches = advanceBracket(matches, result('W1-2', 'c', 'd'))
-    matches = advanceBracket(matches, result('W2-1', 'a', 'c'))
-    matches = advanceBracket(matches, result('L1-1', 'b', 'd'))
-    matches = advanceBracket(matches, result('L2-1', 'b', 'c'))
-    matches = advanceBracket(matches, result('GF-1', 'a', 'b'))
-
-    expect(match(matches, 'GF-reset')).toMatchObject({ active: false, state: 'cancelled' })
   })
 
   it('exposes bracket predicates', () => {

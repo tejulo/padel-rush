@@ -29,6 +29,7 @@ export interface ParticipantReservation extends SchedulingInterval {
 export interface ConditionalReset {
   id: string
   afterMatchId: string
+  fixedInterval?: SchedulingInterval
 }
 
 export interface SchedulingInput {
@@ -188,9 +189,12 @@ export function scheduleReadyMatches(input: SchedulingInput): ScheduledMatch[] {
   const rest = input.restMinutes * MINUTE
   for (const reset of input.conditionalResets ?? []) {
     const grandFinal = scheduled.find((entry) => entry.matchId === reset.afterMatchId)
-    if (!grandFinal) continue
+    const anchor = reset.fixedInterval
+      ? { startsAt: reset.fixedInterval.startsAt, endsAt: reset.fixedInterval.endsAt }
+      : grandFinal
+    if (!anchor) continue
 
-    const earliest = Math.max(startFloor, grandFinal.endsAt.getTime() + rest)
+    const earliest = Math.max(startFloor, anchor.endsAt.getTime() + rest)
     const slot = scheduleInterval(input, earliest, duration, [], booked)
     if (!slot) continue
 

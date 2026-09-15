@@ -79,6 +79,14 @@ export function TournamentView({ tournament }: { tournament: PublicTournament })
       {finished ? <p>El torneo ya termino. Consulta los resultados finales.</p> : null}
       {tournament.state === 'cancelled' ? <p>El torneo fue cancelado.</p> : null}
       <RefreshButton />
+      <h2>Canchas</h2>
+      <ul>
+        {tournament.courts.map((court) => (
+          <li key={court.name}>
+            {court.name}: {court.enabled ? 'habilitada' : 'fuera de servicio'}
+          </li>
+        ))}
+      </ul>
       <h2>Cuadros</h2>
       {tournament.categories.map((category) => (
         <CategorySection key={category.id} category={category} />

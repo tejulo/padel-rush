@@ -16,5 +16,7 @@ FROM node:22-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app ./
+RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs && chown -R nextjs:nodejs /app
+USER nextjs
 EXPOSE 3000
 CMD ["npm", "run", "start"]

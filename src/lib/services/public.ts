@@ -33,9 +33,15 @@ export interface PublicCategory {
   matches: PublicMatch[]
 }
 
+export interface PublicCourt {
+  name: string
+  enabled: boolean
+}
+
 export interface PublicTournament {
   name: string
   state: string
+  courts: PublicCourt[]
   categories: PublicCategory[]
 }
 
@@ -63,6 +69,12 @@ export async function getPublicTournament(token: string): Promise<PublicTourname
     .where(eq(categories.tournamentId, tournament.id))
     .orderBy(asc(categories.category))
   const categoryIds = categoryRows.map((category) => category.id)
+
+  const courtRows = await db
+    .select({ name: courts.name, enabled: courts.enabled })
+    .from(courts)
+    .where(eq(courts.tournamentId, tournament.id))
+    .orderBy(asc(courts.position))
 
   const teamRows = categoryIds.length
     ? await db
@@ -140,12 +152,16 @@ export async function getPublicTournament(token: string): Promise<PublicTourname
   return {
     name: tournament.name,
     state: tournament.state,
+    courts: courtRows,
     categories: categoryRows.map((category) => {
       const categoryMatches = matchesByCategory.get(category.id) ?? []
       const reset = categoryMatches.find((match) => match.stage === 'grand-final-reset')
       const resetPlayed = reset?.state === 'completed' || reset?.state === 'forfeit'
       const titleMatch = resetPlayed ? reset : categoryMatches.find((match) => match.stage === 'grand-final')
-      const champion = titleMatch?.state === 'completed' || titleMatch?.state === 'forfeit' ? titleMatch.winner : null
+      const champion =
+        category.state === 'finished' && (titleMatch?.state === 'completed' || titleMatch?.state === 'forfeit')
+          ? titleMatch.winner
+          : null
       return {
         id: category.id,
         name: category.category,

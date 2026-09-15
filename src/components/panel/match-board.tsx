@@ -7,9 +7,10 @@ import {
   recordForfeitAction,
   recordResultAction,
   startMatchAction,
+  substitutePlayerAction,
   type ActionState,
 } from '@/app/actions/matches'
-import type { MatchBoardEntry } from '@/lib/services/matches'
+import type { MatchBoardEntry, MatchBoardTeam } from '@/lib/services/matches'
 
 const initialState: ActionState = {}
 
@@ -64,9 +65,17 @@ export function MatchBoard({
     const key = courtKey(entry)
     groups.set(key, [...(groups.get(key) ?? []), entry])
   }
+  const warningCount = matches.filter((entry) => entry.afterEndWarning).length
 
   return (
     <div>
+      {warningCount > 0 ? (
+        <p role="alert">
+          {warningCount === 1
+            ? '1 partido termina despues de la hora limite del torneo.'
+            : `${warningCount} partidos terminan despues de la hora limite del torneo.`}
+        </p>
+      ) : null}
       {[...groups.entries()].map(([court, entries]) => (
         <section key={court}>
           <h2>{court}</h2>
@@ -85,6 +94,7 @@ export function MatchBoard({
                   <p>
                     {entry.homeTeam?.name ?? 'por definir'} vs {entry.awayTeam?.name ?? 'por definir'}
                   </p>
+                  {entry.afterEndWarning ? <p role="alert">Termina despues de la hora limite del torneo.</p> : null}
                   {match.score ? <p>Marcador: {formatScore(match.score)}</p> : null}
                   {match.resultReason && match.resultReason !== 'conditional-reset' ? (
                     <p>{match.resultReason === 'absence' ? 'Ausencia' : 'Retiro'}</p>
@@ -101,6 +111,7 @@ export function MatchBoard({
                       enabledCourts={enabledCourts}
                       homeTeam={entry.homeTeam}
                       awayTeam={entry.awayTeam}
+                      replacementCandidates={entry.replacementCandidates}
                     />
                   ) : null}
                 </li>
@@ -113,18 +124,69 @@ export function MatchBoard({
   )
 }
 
+function SubstitutionForm({
+  team,
+  candidates,
+}: {
+  team: MatchBoardTeam
+  candidates: { id: string; name: string }[]
+}) {
+  const [state, action, pending] = useActionState(substitutePlayerAction, initialState)
+
+  return (
+    <form action={action}>
+      <input type="hidden" name="teamId" value={team.id} />
+      <input type="hidden" name="version" value={team.version} />
+      <p>
+        Sustitucion en {team.name} (disponible antes de su primer partido)
+      </p>
+      <label>
+        Sale
+        <select name="outgoingParticipantId" required defaultValue="">
+          <option value="">Seleccionar</option>
+          {team.members.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Entra
+        <select name="replacementParticipantId" required defaultValue="">
+          <option value="">Seleccionar</option>
+          {candidates
+            .filter((candidate) => !team.members.some((member) => member.id === candidate.id))
+            .map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      {state.error ? <p role="alert">{state.error}</p> : null}
+      {state.success ? <p role="status">{state.success}</p> : null}
+      <button type="submit" disabled={pending}>
+        {pending ? 'Guardando...' : 'Registrar sustitucion'}
+      </button>
+    </form>
+  )
+}
+
 function MatchOperations({
   match,
   tournamentId,
   enabledCourts,
   homeTeam,
   awayTeam,
+  replacementCandidates,
 }: {
   match: MatchBoardEntry['match']
   tournamentId: string
   enabledCourts: { id: string; name: string }[]
   homeTeam: MatchBoardEntry['homeTeam']
   awayTeam: MatchBoardEntry['awayTeam']
+  replacementCandidates: MatchBoardEntry['replacementCandidates']
 }) {
   const [startState, startAction, startPending] = useActionState(startMatchAction, initialState)
   const [resultState, resultAction, resultPending] = useActionState(recordResultAction, initialState)
@@ -137,6 +199,7 @@ function MatchOperations({
   const successes = [startState.success, resultState.success, forfeitState.success, clearState.success, moveState.success].filter(
     Boolean,
   )
+  const substitutable = [homeTeam, awayTeam].filter((team): team is MatchBoardTeam => Boolean(team?.eligibleForSubstitution))
 
   return (
     <div>
@@ -206,6 +269,7 @@ function MatchOperations({
       {match.state === 'pending' || match.state === 'scheduled' ? (
         <form action={moveAction}>
           <input type="hidden" name="matchId" value={match.id} />
+          <input type="hidden" name="version" value={match.version} />
           <input type="hidden" name="tournamentId" value={tournamentId} />
           <label>
             Cancha
@@ -235,6 +299,9 @@ function MatchOperations({
           </button>
         </form>
       ) : null}
+      {substitutable.map((team) => (
+        <SubstitutionForm key={team.id} team={team} candidates={replacementCandidates} />
+      ))}
       {errors.map((error) => (
         <p key={error} role="alert">
           {error}

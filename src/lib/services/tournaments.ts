@@ -68,9 +68,18 @@ async function resolveWithGlobalSettings(input: CreateTournamentInput): Promise<
   }
 }
 
+function assertTimezone(timezone: string): void {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone })
+  } catch {
+    throw new Error('La zona horaria no es valida')
+  }
+}
+
 function assertTournamentInput(input: CreateTournamentInput): void {
   if (!input.name.trim()) throw new Error('El nombre del torneo es obligatorio')
   if (!input.date || !input.timezone || !input.startsAt) throw new Error('Faltan datos del torneo')
+  assertTimezone(input.timezone)
   if (input.endsAt !== undefined && input.startsAt >= input.endsAt) {
     throw new Error('La hora limite debe ser posterior al inicio')
   }
@@ -130,6 +139,40 @@ export async function regeneratePublicToken(tournamentId: string, version: numbe
     .returning({ publicToken: tournaments.publicToken })
   if (!updated?.publicToken) throw new Error('Datos desactualizados')
   return updated.publicToken
+}
+
+export async function cancelTournament(tournamentId: string, version: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    const { tournament } = await lockTournamentForWrite(tx, tournamentId)
+    if (tournament.state !== 'draft' && tournament.state !== 'in_progress') {
+      throw new Error('El torneo no se puede cancelar')
+    }
+    if (!Number.isInteger(version) || version !== tournament.version) throw new Error('Datos desactualizados')
+    await tx
+      .update(tournaments)
+      .set({ state: 'cancelled', version: tournament.version + 1, updatedAt: new Date() })
+      .where(and(eq(tournaments.id, tournamentId), eq(tournaments.version, version)))
+  })
+}
+
+export async function deleteTournament(
+  tournamentId: string,
+  version: number,
+  user: Pick<SessionUser, 'id' | 'role'>,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const { tournament } = await lockTournamentForWrite(tx, tournamentId)
+    assertTournamentOwner(user, tournament)
+    if (user.role === 'admin') {
+      if (tournament.state !== 'finished' && tournament.state !== 'cancelled') {
+        throw new Error('Solo puedes eliminar torneos finalizados o cancelados')
+      }
+    } else if (tournament.state !== 'draft') {
+      throw new Error('Solo puedes eliminar tus torneos en borrador')
+    }
+    if (!Number.isInteger(version) || version !== tournament.version) throw new Error('Datos desactualizados')
+    await tx.delete(tournaments).where(and(eq(tournaments.id, tournamentId), eq(tournaments.version, version)))
+  })
 }
 
 export async function lockTournamentForWrite(tx: TournamentTransaction, tournamentId: string) {
