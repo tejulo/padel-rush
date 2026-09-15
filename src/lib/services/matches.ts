@@ -106,9 +106,12 @@ export async function listTournamentMatches(tournamentId: string): Promise<Match
   const board = new Map<string, MatchBoardEntry>()
   for (const row of rows) {
     const startLabel = row.match.scheduledStartAt
-      ? new Intl.DateTimeFormat('es-AR', { timeZone: tournament?.timezone ?? 'UTC', hour: '2-digit', minute: '2-digit', hour12: false }).format(
-          row.match.scheduledStartAt,
-        )
+      ? new Intl.DateTimeFormat('es-AR', {
+          timeZone: tournament?.timezone ?? 'UTC',
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        }).format(row.match.scheduledStartAt)
       : null
     const entry = board.get(row.match.id) ?? {
       match: row.match,
