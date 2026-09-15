@@ -100,15 +100,10 @@ export async function getPublicTournament(token: string): Promise<PublicTourname
     teamMembersById.set(member.teamId, [...(teamMembersById.get(member.teamId) ?? []), member.name])
   }
 
-  const publicTeams = teamRows.map((team) => ({
-    id: team.id,
-    name: team.name,
-    members: teamMembersById.get(team.id) ?? [],
-  }))
   const teamsByCategory = new Map<string, PublicTeam[]>()
-  for (const team of publicTeams) {
-    const categoryId = teamRows.find((row) => row.id === team.id)!.categoryId
-    teamsByCategory.set(categoryId, [...(teamsByCategory.get(categoryId) ?? []), team])
+  for (const team of teamRows) {
+    const entry = { id: team.id, name: team.name, members: teamMembersById.get(team.id) ?? [] }
+    teamsByCategory.set(team.categoryId, [...(teamsByCategory.get(team.categoryId) ?? []), entry])
   }
 
   const slotsByMatch = new Map<string, { slot: string; teamId: string | null }[]>()
@@ -118,6 +113,7 @@ export async function getPublicTournament(token: string): Promise<PublicTourname
 
   const matchesByCategory = new Map<string, PublicMatch[]>()
   for (const row of matchRows) {
+    if (row.match.state === 'cancelled' && row.match.resultReason === 'conditional-reset') continue
     const slots = slotsByMatch.get(row.match.id) ?? []
     const homeTeam = slots.find((slot) => slot.slot === 'a')?.teamId
     const awayTeam = slots.find((slot) => slot.slot === 'b')?.teamId

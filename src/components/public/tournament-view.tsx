@@ -68,7 +68,7 @@ function CategorySection({ category }: { category: PublicCategory }) {
 }
 
 export function TournamentView({ tournament }: { tournament: PublicTournament }) {
-  const finished = tournament.state === 'finished' || tournament.state === 'completed' || tournament.state === 'cancelled'
+  const finished = tournament.state === 'finished' || tournament.state === 'completed'
 
   return (
     <section>
@@ -76,6 +76,7 @@ export function TournamentView({ tournament }: { tournament: PublicTournament })
       <p role="status">Estado: {STATE_LABELS[tournament.state] ?? tournament.state}</p>
       {tournament.state === 'draft' ? <p>El torneo comienza pronto.</p> : null}
       {finished ? <p>El torneo ya termino. Consulta los resultados finales.</p> : null}
+      {tournament.state === 'cancelled' ? <p>El torneo fue cancelado.</p> : null}
       <RefreshButton />
       <h2>Cuadros</h2>
       {tournament.categories.map((category) => (

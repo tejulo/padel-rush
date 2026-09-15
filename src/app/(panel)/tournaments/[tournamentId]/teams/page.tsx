@@ -64,7 +64,9 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
         )
       })}
       {editable ? <TeamLockForm tournamentId={tournament.id} /> : null}
-      {tournament.state === 'draft' && categoryRows.some((category) => category.state === 'locked') ? (
+      {tournament.state === 'draft' &&
+      categoryRows.some((category) => category.state !== 'cancelled') &&
+      categoryRows.filter((category) => category.state !== 'cancelled').every((category) => category.state === 'locked') ? (
         <StartTournamentForm tournamentId={tournament.id} />
       ) : null}
       {tournament.state === 'in_progress' ? <ReturnTournamentToDraftForm tournamentId={tournament.id} /> : null}
