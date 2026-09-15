@@ -37,6 +37,7 @@ describe('match operations', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    await resetDatabase()
     await db.insert(users).values([
       {
         id: 'organizer-id',

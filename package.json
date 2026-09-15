@@ -12,7 +12,9 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/lib/db/migrate.ts"
+    "db:migrate": "tsx src/lib/db/migrate.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "backup": "bash scripts/backup.sh"
   },
   "dependencies": {
     "argon2": "^0.45.1",
