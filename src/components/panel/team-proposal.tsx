@@ -6,6 +6,7 @@ import {
   lockTeamsAction,
   returnTournamentToDraftAction,
   saveTeamsAction,
+  startTournamentAction,
   type ActionState,
 } from '@/app/actions/teams'
 import type { PairingParticipant, TeamProposal as DomainTeamProposal } from '@/lib/domain/pairing'
@@ -166,6 +167,20 @@ export function ReturnTournamentToDraftForm({ tournamentId }: { tournamentId: st
       {state.success ? <p role="status">{state.success}</p> : null}
       <button type="submit" disabled={pending}>
         {pending ? 'Volviendo...' : 'Volver a borrador'}
+      </button>
+    </form>
+  )
+}
+
+export function StartTournamentForm({ tournamentId }: { tournamentId: string }) {
+  const [state, formAction, pending] = useActionState(startTournamentAction, initialState)
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="tournamentId" value={tournamentId} />
+      {state.error ? <p role="alert">{state.error}</p> : null}
+      {state.success ? <p role="status">{state.success}</p> : null}
+      <button type="submit" disabled={pending}>
+        {pending ? 'Iniciando...' : 'Iniciar torneo y generar cuadros'}
       </button>
     </form>
   )

@@ -7,6 +7,7 @@ import {
   assertTournamentOwner,
   createTournament,
   getTournament,
+  regeneratePublicToken,
   updateTournament,
   type CreateTournamentInput,
   type UpdateTournamentInput,
@@ -101,4 +102,24 @@ export async function updateTournamentAction(_previousState: ActionState, formDa
   revalidatePath(`/tournaments/${id}`)
   revalidatePath(`/tournaments/${id}/participants`)
   return { success: 'Cambios guardados' }
+}
+
+export async function regeneratePublicLinkAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser()
+  const id = value(formData, 'id')
+  const version = numberValue(formData, 'version')
+  if (!id || version === undefined) return { error: 'Faltan datos de version' }
+
+  const tournament = await getTournament(id)
+  if (!tournament) return { error: 'Torneo no encontrado' }
+
+  try {
+    assertTournamentOwner(user, tournament)
+    await regeneratePublicToken(id, version)
+  } catch (error) {
+    return errorState(error)
+  }
+
+  revalidatePath(`/tournaments/${id}`)
+  return { success: 'Enlace publico regenerado' }
 }

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { and, asc, eq, lte } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/guards'
 import type { SessionUser } from '@/lib/auth/session'
@@ -119,6 +119,17 @@ export function assertTournamentOwner(user: Pick<SessionUser, 'id' | 'role'>, to
   if (user.role !== 'admin' && tournament.organizerId !== user.id) {
     throw new Error('No tienes permisos para este torneo')
   }
+}
+
+export async function regeneratePublicToken(tournamentId: string, version: number): Promise<string> {
+  const token = randomBytes(24).toString('base64url')
+  const [updated] = await db
+    .update(tournaments)
+    .set({ publicToken: token, version: version + 1, updatedAt: new Date() })
+    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.version, version)))
+    .returning({ publicToken: tournaments.publicToken })
+  if (!updated?.publicToken) throw new Error('Datos desactualizados')
+  return updated.publicToken
 }
 
 export async function lockTournamentForWrite(tx: TournamentTransaction, tournamentId: string) {

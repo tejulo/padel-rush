@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/auth/guards'
+import { PublicLink } from '@/components/panel/public-link'
 import { TournamentForm } from '@/components/panel/tournament-form'
 import { assertTournamentOwner, getCategories, getTournament } from '@/lib/services/tournaments'
 
@@ -48,6 +49,12 @@ export default async function TournamentPage({ params }: { params: Promise<{ tou
           </li>
         ))}
       </ul>
+      <h2>Enlace publico</h2>
+      {tournament.publicToken ? (
+        <PublicLink tournamentId={tournament.id} version={tournament.version} publicToken={tournament.publicToken} />
+      ) : (
+        <p>El enlace publico se crea al generar los cuadros.</p>
+      )}
       <h2>Configuracion</h2>
       <TournamentForm tournament={tournament} />
     </section>

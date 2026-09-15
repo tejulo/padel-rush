@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/guards'
 import type { ActionState } from '@/app/actions/tournaments'
+import { createBrackets } from '@/lib/services/brackets'
 import { assertTournamentOwner, getTournament } from '@/lib/services/tournaments'
 import {
   cancelCategory,
@@ -119,6 +120,21 @@ export async function cancelCategoryAction(_previousState: ActionState, formData
   revalidatePath(`/tournaments/${tournamentId}`)
   revalidatePath(`/tournaments/${tournamentId}/teams`)
   return { success: 'Categoria cancelada' }
+}
+
+export async function startTournamentAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser()
+  const tournamentId = value(formData, 'tournamentId')
+  try {
+    await assertAccess(user, tournamentId)
+    await createBrackets(tournamentId)
+  } catch (error) {
+    return errorState(error)
+  }
+
+  revalidatePath(`/tournaments/${tournamentId}`)
+  revalidatePath(`/tournaments/${tournamentId}/matches`)
+  return { success: 'Torneo iniciado' }
 }
 
 export async function returnTournamentToDraftAction(

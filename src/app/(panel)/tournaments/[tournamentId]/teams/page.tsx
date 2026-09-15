@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/auth/guards'
 import { proposeTeams } from '@/lib/domain/pairing'
-import { TeamLockForm, TeamProposal, ReturnTournamentToDraftForm } from '@/components/panel/team-proposal'
+import { TeamLockForm, TeamProposal, ReturnTournamentToDraftForm, StartTournamentForm } from '@/components/panel/team-proposal'
 import { getParticipants } from '@/lib/services/participants'
 import { getTournamentTeams } from '@/lib/services/teams'
 import { assertTournamentOwner, getTournament } from '@/lib/services/tournaments'
@@ -64,6 +64,9 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
         )
       })}
       {editable ? <TeamLockForm tournamentId={tournament.id} /> : null}
+      {tournament.state === 'draft' && categoryRows.some((category) => category.state === 'locked') ? (
+        <StartTournamentForm tournamentId={tournament.id} />
+      ) : null}
       {tournament.state === 'in_progress' ? <ReturnTournamentToDraftForm tournamentId={tournament.id} /> : null}
     </section>
   )
