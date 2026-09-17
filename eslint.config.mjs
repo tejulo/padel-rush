@@ -6,6 +6,8 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   globalIgnores([
+    '.agents/**',
+    '.claude/**',
     '.next/**',
     '.worktrees/**',
     'out/**',

@@ -10,6 +10,7 @@ import {
   substitutePlayerAction,
   type ActionState,
 } from '@/app/actions/matches'
+import { scoreFormConfig } from '@/lib/domain/scoring'
 import type { MatchBoardEntry, MatchBoardTeam } from '@/lib/services/matches'
 
 const initialState: ActionState = {}
@@ -193,7 +194,8 @@ function MatchOperations({
   const [forfeitState, forfeitAction, forfeitPending] = useActionState(recordForfeitAction, initialState)
   const [clearState, clearAction, clearPending] = useActionState(clearResultAction, initialState)
   const [moveState, moveAction, movePending] = useActionState(moveMatchAction, initialState)
-  const [sets, setSets] = useState(1)
+  const resultForm = scoreFormConfig(match.format)
+  const [sets, setSets] = useState(resultForm.setOptions[0]!)
 
   const errors = [startState.error, resultState.error, forfeitState.error, clearState.error, moveState.error].filter(Boolean)
   const successes = [startState.success, resultState.success, forfeitState.success, clearState.success, moveState.success].filter(
@@ -216,24 +218,30 @@ function MatchOperations({
         <form action={resultAction}>
           <input type="hidden" name="matchId" value={match.id} />
           <input type="hidden" name="version" value={match.version} />
-          <label>
-            Sets
-            <select value={sets} onChange={(event) => setSets(Number(event.target.value))}>
-              <option value={1}>1 set</option>
-              <option value={2}>2 sets</option>
-              <option value={3}>3 sets</option>
-            </select>
-          </label>
+          {resultForm.setOptions.length > 1 ? (
+            <label>
+              Sets
+              <select value={sets} onChange={(event) => setSets(Number(event.target.value))}>
+                {resultForm.setOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option} sets
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p>Un set a 9 juegos.</p>
+          )}
           {Array.from({ length: sets }, (_, index) => (
             <fieldset key={index}>
               <legend>Set {index + 1}</legend>
               <label>
                 {homeTeam?.name ?? 'Local'}
-                <input name={`home-${index}`} type="number" min="0" max="9" required />
+                <input name={`home-${index}`} type="number" min="0" max={resultForm.maxGames} required />
               </label>
               <label>
                 {awayTeam?.name ?? 'Visitante'}
-                <input name={`away-${index}`} type="number" min="0" max="9" required />
+                <input name={`away-${index}`} type="number" min="0" max={resultForm.maxGames} required />
               </label>
             </fieldset>
           ))}

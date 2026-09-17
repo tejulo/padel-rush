@@ -29,6 +29,15 @@ function validLongSet(set: ScoreSet): boolean {
   return (winner === 6 && loser <= 4) || (winner === 7 && (loser === 5 || loser === 6))
 }
 
+export interface ScoreFormConfig {
+  setOptions: number[]
+  maxGames: number
+}
+
+export function scoreFormConfig(format: MatchFormat): ScoreFormConfig {
+  return format === 'best-of-three' ? { setOptions: [2, 3], maxGames: 7 } : { setOptions: [1], maxGames: 9 }
+}
+
 export function validateScore(format: MatchFormat, sets: readonly ScoreSet[]): ScoreValidation {
   if (format !== 'one-set-nine' && format !== 'best-of-three') return { ok: false, message: 'Formato de partido invalido' }
   if (!Array.isArray(sets)) return { ok: false, message: 'El marcador no es valido' }

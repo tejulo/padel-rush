@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateScore } from '@/lib/domain/scoring'
+import { scoreFormConfig, validateScore } from '@/lib/domain/scoring'
 
 describe('score validation', () => {
   it('accepts short winning scores and rejects a score without nine games', () => {
@@ -32,5 +32,15 @@ describe('score validation', () => {
     expect(validateScore('best-of-three', [{ home: 8, away: 6 }, { home: 6, away: 0 }]).ok).toBe(false)
     expect(validateScore('best-of-three', [{ home: 7, away: 5 }]).ok).toBe(false)
     expect(validateScore('best-of-three', [{ home: 7, away: 5 }, { home: 6, away: 4 }, { home: 0, away: 6 }]).ok).toBe(false)
+  })
+})
+
+describe('score form configuration', () => {
+  it('offers only one set and a nine-game maximum for short matches', () => {
+    expect(scoreFormConfig('one-set-nine')).toEqual({ setOptions: [1], maxGames: 9 })
+  })
+
+  it('offers two or three sets and a seven-game maximum for long matches', () => {
+    expect(scoreFormConfig('best-of-three')).toEqual({ setOptions: [2, 3], maxGames: 7 })
   })
 })
