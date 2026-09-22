@@ -6,8 +6,6 @@ export type TournamentState = 'draft' | 'in_progress' | 'finished' | 'completed'
 
 export type MatchState = 'pending' | 'scheduled' | 'in_progress' | 'completed' | 'forfeit' | 'cancelled'
 
-export type MatchFormat = 'one-set-nine' | 'best-of-three'
-
 export type MatchSlot = 'a' | 'b'
 
 export type MatchOutcome = 'winner' | 'loser'

@@ -1,4 +1,5 @@
-import type { MatchFormat, MatchOutcome, MatchSlot, MatchStage, MatchState } from '@/lib/domain/types'
+import { profileForStage, type MatchProfile } from '@/lib/domain/format'
+import type { MatchOutcome, MatchSlot, MatchStage, MatchState } from '@/lib/domain/types'
 
 export type { MatchStage } from '@/lib/domain/types'
 
@@ -33,7 +34,7 @@ export interface BracketMatch {
   stage: MatchStage
   round: number
   position: number
-  format: MatchFormat
+  profile: MatchProfile
   state: MatchState
   active: boolean
   slots: Record<MatchSlot, BracketSlot>
@@ -64,10 +65,6 @@ function emptySlots(): Record<MatchSlot, BracketSlot> {
   return { a: {}, b: {} }
 }
 
-function matchFormat(stage: MatchStage): MatchFormat {
-  return isFinalStage(stage) ? 'best-of-three' : 'one-set-nine'
-}
-
 function roundMatch(
   categoryId: string,
   key: string,
@@ -82,7 +79,7 @@ function roundMatch(
     stage,
     round,
     position,
-    format: matchFormat(stage),
+    profile: profileForStage(stage),
     state: 'pending',
     active,
     slots: emptySlots(),

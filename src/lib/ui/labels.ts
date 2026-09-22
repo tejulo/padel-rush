@@ -1,4 +1,4 @@
-import type { Category, CategoryState, MatchFormat, MatchStage, MatchState, TournamentState } from '@/lib/domain/types'
+import type { Category, CategoryState, MatchStage, MatchState, TournamentState } from '@/lib/domain/types'
 
 export const CATEGORY_LABELS: Record<Category, string> = { men: 'Masculino', women: 'Femenino', mixed: 'Mixto' }
 
@@ -44,11 +44,6 @@ export const MATCH_REASON_LABELS: Record<'absence' | 'retirement', string> = {
 export const ORGANIZER_STATE_LABELS: Record<'active' | 'inactive', string> = {
   active: 'Activo',
   inactive: 'Inactivo',
-}
-
-export const FORMAT_LABELS: Record<MatchFormat, string> = {
-  'one-set-nine': 'Un set a 9 juegos',
-  'best-of-three': 'Mejor de tres sets',
 }
 
 const MONTHS = [

@@ -155,7 +155,7 @@ describe('bracket persistence', () => {
     expect(matchRows.filter((match) => match.state === 'cancelled')).toHaveLength(1)
 
     const reset = matchRows.find((match) => match.stage === 'grand-final-reset')!
-    expect(reset).toMatchObject({ format: 'best-of-three', state: 'cancelled', resultReason: 'conditional-reset' })
+    expect(reset).toMatchObject({ profile: 'finals', state: 'cancelled', resultReason: 'conditional-reset' })
 
     const firstRound = matchRows.find((match) => match.stage === 'winners-round' && match.round === 1 && match.position === 1)!
     const losersRound = matchRows.find((match) => match.stage === 'losers-round' && match.round === 1 && match.position === 1)!
@@ -255,7 +255,7 @@ describe('bracket persistence', () => {
       stage: 'winners-round',
       round: 1,
       position: 1,
-      format: 'one-set-nine',
+      profile: 'regular',
       state: 'pending',
     })
 

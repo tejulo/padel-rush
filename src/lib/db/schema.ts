@@ -40,7 +40,7 @@ export const matchStateEnum = pgEnum('match_state', [
   'forfeit',
   'cancelled',
 ])
-export const matchFormatEnum = pgEnum('match_format', ['one-set-nine', 'best-of-three'])
+export const matchProfileEnum = pgEnum('match_profile', ['regular', 'finals'])
 export const matchSlotEnum = pgEnum('match_slot', ['a', 'b'])
 export const matchOutcomeEnum = pgEnum('match_outcome', ['winner', 'loser'])
 
@@ -234,7 +234,7 @@ export const matches = pgTable(
     stage: text('stage').notNull(),
     round: integer('round').notNull(),
     position: integer('position').notNull(),
-    format: matchFormatEnum('format').notNull(),
+    profile: matchProfileEnum('profile').notNull(),
     state: matchStateEnum('state').notNull().default('pending'),
     courtId: text('court_id').references(() => courts.id, { onDelete: 'set null' }),
     scheduledStartAt: timestamp('scheduled_start_at', { withTimezone: true }),

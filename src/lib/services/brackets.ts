@@ -94,7 +94,7 @@ async function persistCategoryBracket(tx: TeamDatabase, bracket: CategoryBracket
       stage: match.stage,
       round: match.round,
       position: match.position,
-      format: match.format,
+      profile: match.profile,
       state: match.state,
       resultReason: match.resultReason ?? null,
     })),

@@ -317,7 +317,7 @@ describe('team formation', () => {
       stage: 'winners-final',
       round: 1,
       position: 1,
-      format: 'best-of-three',
+      profile: 'finals',
       state: 'pending',
     })
 
@@ -354,7 +354,7 @@ describe('team formation', () => {
       stage: 'winners-final',
       round: 1,
       position: 1,
-      format: 'best-of-three',
+      profile: 'finals',
       state: 'in_progress',
     })
 

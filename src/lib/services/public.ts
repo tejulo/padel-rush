@@ -14,7 +14,6 @@ export interface PublicMatch {
   round: number
   position: number
   state: string
-  format: string
   courtName: string | null
   startLabel: string | null
   homeTeam: string | null
@@ -137,7 +136,6 @@ export async function getPublicTournament(token: string): Promise<PublicTourname
       round: row.match.round,
       position: row.match.position,
       state: row.match.state,
-      format: row.match.format,
       courtName: row.courtName,
       startLabel: startLabel(row.match.scheduledStartAt, tournament.timezone),
       homeTeam: homeTeam ? (teamNameById.get(homeTeam) ?? null) : null,

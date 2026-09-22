@@ -105,7 +105,7 @@ function indexSlots(slotRows: readonly SlotRow[], memberRows: readonly MemberRow
 function fixedInterval(match: Match, shortMinutes: number, longMinutes: number): { startsAt: Date; endsAt: Date } | null {
   const startsAt = match.actualStartAt ?? match.scheduledStartAt
   if (!startsAt) return null
-  const minutes = match.format === 'best-of-three' ? longMinutes : shortMinutes
+  const minutes = match.profile === 'finals' ? longMinutes : shortMinutes
   const fallbackEnd = new Date(startsAt.getTime() + minutes * MINUTE)
   if (match.actualStartAt && !match.actualEndAt) {
     const scheduledEnd = match.scheduledEndAt?.getTime() ?? 0
@@ -163,7 +163,7 @@ async function replanWith(database: SchedulingDatabase, tournamentId: string, fr
     .filter((match) => OPEN_STATES.includes(match.state) && (teams.get(match.id) ?? []).length === 2)
     .map((match) => ({
       id: match.id,
-      profile: match.format === 'best-of-three' ? 'finals' : 'regular',
+      profile: match.profile,
       participantIds: participants.get(match.id) ?? [],
       readyAt: readiness.get(match.id) ?? from,
       dependentCount: dependentCounts.get(match.id) ?? 0,

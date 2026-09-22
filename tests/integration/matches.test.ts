@@ -151,7 +151,7 @@ describe('match operations', () => {
     const row = await match(stage, round, position)
     await schedule(row.id)
     const sets =
-      row.format === 'one-set-nine'
+      row.profile === 'regular'
         ? [{ home: winner === 'home' ? 9 : 7, away: winner === 'home' ? 7 : 9 }]
         : winner === 'home'
           ? [{ home: 6, away: 4 }, { home: 6, away: 4 }]

@@ -53,6 +53,17 @@ describe('database schema', () => {
     expect(result.rows[0]?.indexdef).toMatch(/unique.*role.*admin/i)
   })
 
+  it('stores the match profile and no longer has a match format column', async () => {
+    const result = await db.execute<{ column_name: string }>(sql`
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public' and table_name = 'matches'
+    `)
+    const columns = result.rows.map((column) => column.column_name)
+    expect(columns).toContain('profile')
+    expect(columns).not.toContain('format')
+  })
+
   it('allows login attempts without a validated IP address', async () => {
     const result = await db.execute<{ is_nullable: string }>(sql`
       select is_nullable
