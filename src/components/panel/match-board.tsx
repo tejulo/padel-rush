@@ -10,6 +10,7 @@ import {
   substitutePlayerAction,
   type ActionState,
 } from '@/app/actions/matches'
+import type { ProfileFormat } from '@/lib/domain/format'
 import { scoreFormConfig } from '@/lib/domain/scoring'
 import type { MatchBoardEntry, MatchBoardTeam } from '@/lib/services/matches'
 
@@ -112,6 +113,7 @@ export function MatchBoard({
                       enabledCourts={enabledCourts}
                       homeTeam={entry.homeTeam}
                       awayTeam={entry.awayTeam}
+                      format={entry.format}
                       replacementCandidates={entry.replacementCandidates}
                     />
                   ) : null}
@@ -180,6 +182,7 @@ function MatchOperations({
   enabledCourts,
   homeTeam,
   awayTeam,
+  format,
   replacementCandidates,
 }: {
   match: MatchBoardEntry['match']
@@ -187,6 +190,7 @@ function MatchOperations({
   enabledCourts: { id: string; name: string }[]
   homeTeam: MatchBoardEntry['homeTeam']
   awayTeam: MatchBoardEntry['awayTeam']
+  format: ProfileFormat
   replacementCandidates: MatchBoardEntry['replacementCandidates']
 }) {
   const [startState, startAction, startPending] = useActionState(startMatchAction, initialState)
@@ -194,7 +198,7 @@ function MatchOperations({
   const [forfeitState, forfeitAction, forfeitPending] = useActionState(recordForfeitAction, initialState)
   const [clearState, clearAction, clearPending] = useActionState(clearResultAction, initialState)
   const [moveState, moveAction, movePending] = useActionState(moveMatchAction, initialState)
-  const resultForm = scoreFormConfig(match.format)
+  const resultForm = scoreFormConfig(format)
   const [sets, setSets] = useState(resultForm.setOptions[0]!)
 
   const errors = [startState.error, resultState.error, forfeitState.error, clearState.error, moveState.error].filter(Boolean)
@@ -230,7 +234,7 @@ function MatchOperations({
               </select>
             </label>
           ) : (
-            <p>Un set a 9 juegos.</p>
+            <p>Un set a {format.games} juegos.</p>
           )}
           {Array.from({ length: sets }, (_, index) => (
             <fieldset key={index}>

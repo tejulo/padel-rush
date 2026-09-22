@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import type { MatchProfile } from '@/lib/domain/format'
 import {
   scheduleReadyMatches,
   type ScheduledMatch,
   type SchedulingInput,
   type SchedulingMatch,
 } from '@/lib/domain/scheduling'
-import type { MatchFormat } from '@/lib/domain/types'
 
 const MINUTE = 60_000
 const at = (hour: number, minute = 0) => new Date(Date.UTC(2026, 8, 13, hour, minute))
 
-function match(
+function makeMatch(
   id: string,
   participantIds: string[],
   readyAt = at(9),
-  format: MatchFormat = 'one-set-nine',
+  profile: MatchProfile = 'regular',
   dependentCount = 0,
 ): SchedulingMatch {
-  return { id, participantIds, readyAt, format, dependentCount }
+  return { id, participantIds, readyAt, profile, dependentCount }
 }
 
 function input(overrides: Partial<SchedulingInput> = {}): SchedulingInput {
@@ -46,7 +46,7 @@ describe('scheduleReadyMatches', () => {
   it('does not overlap a player entered in mixed and men and respects the rest', () => {
     const schedule = scheduleReadyMatches(
       input({
-        matches: [match('men-1', ['p1', 'p2', 'p3', 'p4']), match('mixed-1', ['p1', 'p5', 'p6', 'p7'])],
+        matches: [makeMatch('men-1', ['p1', 'p2', 'p3', 'p4']), makeMatch('mixed-1', ['p1', 'p5', 'p6', 'p7'])],
       }),
     )
 
@@ -58,7 +58,7 @@ describe('scheduleReadyMatches', () => {
 
   it('uses the long duration for a winners final', () => {
     const schedule = scheduleReadyMatches(
-      input({ matches: [match('w-final', ['p1', 'p2', 'p3', 'p4'], at(9), 'best-of-three')] }),
+      input({ matches: [makeMatch('w-final', ['p1', 'p2', 'p3', 'p4'], at(9), 'finals')] }),
     )
 
     expect(schedule[0].endsAt.getTime() - schedule[0].startsAt.getTime()).toBe(90 * MINUTE)
@@ -69,7 +69,7 @@ describe('scheduleReadyMatches', () => {
       input({
         courtReservations: [{ courtId: 'c1', startsAt: at(9), endsAt: at(9, 40) }],
         participantReservations: [{ participantId: 'p1', startsAt: at(9), endsAt: at(10) }],
-        matches: [match('next', ['p1', 'p2', 'p3', 'p4'])],
+        matches: [makeMatch('next', ['p1', 'p2', 'p3', 'p4'])],
       }),
     )
 
@@ -82,9 +82,9 @@ describe('scheduleReadyMatches', () => {
       input({
         courts: [{ id: 'c1', enabled: true }],
         matches: [
-          match('early', ['p1', 'p2', 'p3', 'p4'], at(9), 'one-set-nine', 0),
-          match('unlocks-most', ['p5', 'p6', 'p7', 'p8'], at(9), 'one-set-nine', 3),
-          match('unlocks-some', ['p9', 'p10', 'p11', 'p12'], at(9), 'one-set-nine', 1),
+          makeMatch('early', ['p1', 'p2', 'p3', 'p4'], at(9), 'regular', 0),
+          makeMatch('unlocks-most', ['p5', 'p6', 'p7', 'p8'], at(9), 'regular', 3),
+          makeMatch('unlocks-some', ['p9', 'p10', 'p11', 'p12'], at(9), 'regular', 1),
         ],
       }),
     )
@@ -99,8 +99,8 @@ describe('scheduleReadyMatches', () => {
       input({
         courts: [{ id: 'c1', enabled: true }],
         matches: [
-          match('later', ['p5', 'p6', 'p7', 'p8'], at(9, 10)),
-          match('earlier', ['p1', 'p2', 'p3', 'p4'], at(9)),
+          makeMatch('later', ['p5', 'p6', 'p7', 'p8'], at(9, 10)),
+          makeMatch('earlier', ['p1', 'p2', 'p3', 'p4'], at(9)),
         ],
       }),
     )
@@ -112,9 +112,9 @@ describe('scheduleReadyMatches', () => {
 
   it('runs three matches in parallel with three courts and stacks the third with two', () => {
     const matches = [
-      match('a', ['p1', 'p2', 'p3', 'p4']),
-      match('b', ['p5', 'p6', 'p7', 'p8']),
-      match('c', ['p9', 'p10', 'p11', 'p12']),
+      makeMatch('a', ['p1', 'p2', 'p3', 'p4']),
+      makeMatch('b', ['p5', 'p6', 'p7', 'p8']),
+      makeMatch('c', ['p9', 'p10', 'p11', 'p12']),
     ]
 
     const twoCourts = scheduleReadyMatches(input({ matches }))
@@ -140,7 +140,7 @@ describe('scheduleReadyMatches', () => {
           { id: 'c1', enabled: true },
           { id: 'c2', enabled: false },
         ],
-        matches: [match('a', ['p1', 'p2', 'p3', 'p4']), match('b', ['p5', 'p6', 'p7', 'p8'])],
+        matches: [makeMatch('a', ['p1', 'p2', 'p3', 'p4']), makeMatch('b', ['p5', 'p6', 'p7', 'p8'])],
       }),
     )
 
@@ -154,8 +154,8 @@ describe('scheduleReadyMatches', () => {
         courts: [{ id: 'c1', enabled: true }],
         tournamentEndsAt: at(10),
         matches: [
-          match('short', ['p1', 'p2', 'p3', 'p4']),
-          match('long', ['p5', 'p6', 'p7', 'p8'], at(9, 30), 'best-of-three'),
+          makeMatch('short', ['p1', 'p2', 'p3', 'p4']),
+          makeMatch('long', ['p5', 'p6', 'p7', 'p8'], at(9, 30), 'finals'),
         ],
       }),
     )
@@ -169,7 +169,7 @@ describe('scheduleReadyMatches', () => {
     const schedule = scheduleReadyMatches(
       input({
         courts: [{ id: 'c1', enabled: true }],
-        matches: [match('gf', ['p1', 'p2', 'p3', 'p4'], at(9), 'best-of-three')],
+        matches: [makeMatch('gf', ['p1', 'p2', 'p3', 'p4'], at(9), 'finals')],
         conditionalResets: [{ id: 'gf-reset', afterMatchId: 'gf' }],
       }),
     )

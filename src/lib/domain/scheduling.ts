@@ -1,8 +1,8 @@
-import type { MatchFormat } from '@/lib/domain/types'
+import type { MatchProfile } from '@/lib/domain/format'
 
 export interface SchedulingMatch {
   id: string
-  format: MatchFormat
+  profile: MatchProfile
   participantIds: readonly string[]
   readyAt: Date
   dependentCount?: number
@@ -169,7 +169,7 @@ export function scheduleReadyMatches(input: SchedulingInput): ScheduledMatch[] {
 
   for (const match of sorted) {
     const duration =
-      (match.format === 'best-of-three' ? input.longMatchMinutes : input.shortMatchMinutes) * MINUTE
+      (match.profile === 'finals' ? input.longMatchMinutes : input.shortMatchMinutes) * MINUTE
     const earliest = Math.max(startFloor, match.readyAt.getTime())
     const slot = scheduleInterval(input, earliest, duration, match.participantIds, booked)
     if (!slot) throw new Error(`No se pudo programar el partido ${match.id}`)

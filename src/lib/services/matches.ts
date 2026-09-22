@@ -13,6 +13,7 @@ import {
   type Match,
   type Tournament,
 } from '@/lib/db/schema'
+import { defaultFormatConfig, parseFormatConfig, type MatchProfile, type ProfileFormat } from '@/lib/domain/format'
 import { validateScore, type ScoreSet } from '@/lib/domain/scoring'
 import type { MatchSlot } from '@/lib/domain/types'
 import { lockTournamentForWrite, type TournamentTransaction } from '@/lib/services/tournaments'
@@ -54,6 +55,14 @@ type MatchDatabase = TournamentTransaction
 type SlotRow = typeof matchSlots.$inferSelect
 type CategoryRow = typeof categories.$inferSelect
 
+function matchProfile(match: Match): MatchProfile {
+  return match.format === 'best-of-three' ? 'finals' : 'regular'
+}
+
+function formatFor(tournament: Tournament, match: Match): ProfileFormat {
+  return parseFormatConfig(tournament.formatConfig)[matchProfile(match)]
+}
+
 function staleVersion(version: number, current: number): void {
   if (!Number.isInteger(version) || version !== current) throw new Error('Datos desactualizados')
 }
@@ -91,6 +100,7 @@ export type MatchBoardEntry = {
   awayTeam: MatchBoardTeam | null
   scheduledStartLabel: string | null
   afterEndWarning: boolean
+  format: ProfileFormat
   replacementCandidates: { id: string; name: string }[]
 }
 
@@ -177,6 +187,7 @@ export async function listTournamentMatches(tournamentId: string): Promise<Match
       awayTeam: null,
       scheduledStartLabel: startLabel,
       afterEndWarning: Boolean(endLimit && row.match.scheduledEndAt && row.match.scheduledEndAt.getTime() > endLimit.getTime()),
+      format: tournament ? formatFor(tournament, row.match) : defaultFormatConfig().regular,
       replacementCandidates: candidatesByCategory.get(row.match.categoryId) ?? [],
     }
     const team: MatchBoardTeam | null =
@@ -235,7 +246,7 @@ export async function moveMatch(input: MoveMatchInput): Promise<Match> {
       .limit(1)
     if (!court?.enabled) throw new Error('La cancha no esta habilitada')
 
-    const minutes = match.format === 'best-of-three' ? tournament.longMatchMinutes : tournament.shortMatchMinutes
+    const minutes = matchProfile(match) === 'finals' ? tournament.longMatchMinutes : tournament.shortMatchMinutes
     const endsAt = new Date(input.startsAt.getTime() + minutes * 60_000)
     const startLimit = tournamentInstant(tournament, tournament.startsAt)
     const endLimit = tournamentInstant(tournament, tournament.endsAt)
@@ -476,7 +487,7 @@ export async function recordResult(input: RecordResultInput): Promise<Match> {
     assertActiveTournament(context)
     assertPlayable(context.match)
     staleVersion(input.version, context.match.version)
-    const validation = validateScore(context.match.format, input.sets)
+    const validation = validateScore(formatFor(context.tournament, context.match), input.sets)
     if (!validation.ok) throw new Error(validation.message)
     const slots = await lockedSlots(tx, input.matchId)
     const { winnerTeamId, loserTeamId, winningSlot } = winnerAndLoser(slots, validation.winner)
@@ -486,9 +497,10 @@ export async function recordResult(input: RecordResultInput): Promise<Match> {
   })
 }
 
-function forfeitScore(format: Match['format'], homeTeamId: string, loserTeamId: string): ScoreSet[] {
+function forfeitScore(format: ProfileFormat, homeTeamId: string, loserTeamId: string): ScoreSet[] {
   const winnerSlot = loserTeamId === homeTeamId ? 'away' : 'home'
-  const sets = format === 'one-set-nine' ? [9] : [6, 6]
+  const needed = Math.ceil(format.sets / 2)
+  const sets = Array.from({ length: needed }, () => format.games)
   return sets.map((games) => (winnerSlot === 'home' ? { home: games, away: 0 } : { home: 0, away: games }))
 }
 
@@ -511,7 +523,7 @@ export async function recordForfeit(input: ForfeitInput): Promise<Match> {
       winnerTeamId,
       input.forfeitTeamId,
       input.forfeitTeamId === home.teamId ? 'b' : 'a',
-      forfeitScore(context.match.format, home.teamId!, input.forfeitTeamId),
+      forfeitScore(formatFor(context.tournament, context.match), home.teamId!, input.forfeitTeamId),
       input.reason,
     )
     await replanPendingMatches(context.tournament.id, new Date(), tx)

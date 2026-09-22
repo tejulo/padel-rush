@@ -1,4 +1,4 @@
-import type { MatchFormat } from '@/lib/domain/types'
+import type { ProfileFormat } from '@/lib/domain/format'
 
 export interface ScoreSet {
   home: number
@@ -13,20 +13,18 @@ function isGameScore(value: number): boolean {
   return Number.isInteger(value) && value >= 0
 }
 
-function validShortSet(set: ScoreSet): boolean {
+function validSet(set: ScoreSet, format: ProfileFormat): boolean {
   if (!set || typeof set !== 'object') return false
   if (!isGameScore(set.home) || !isGameScore(set.away)) return false
   const winner = Math.max(set.home, set.away)
   const loser = Math.min(set.home, set.away)
-  return winner === 9 && (loser <= 7 || loser === 8)
-}
-
-function validLongSet(set: ScoreSet): boolean {
-  if (!set || typeof set !== 'object') return false
-  if (!isGameScore(set.home) || !isGameScore(set.away)) return false
-  const winner = Math.max(set.home, set.away)
-  const loser = Math.min(set.home, set.away)
-  return (winner === 6 && loser <= 4) || (winner === 7 && (loser === 5 || loser === 6))
+  if (format.tieBreak && format.advantage) {
+    return (
+      (winner === format.games && loser <= format.games - 2) ||
+      (winner === format.games + 1 && (loser === format.games - 1 || loser === format.games))
+    )
+  }
+  return winner === format.games && loser <= format.games - 1
 }
 
 export interface ScoreFormConfig {
@@ -34,32 +32,30 @@ export interface ScoreFormConfig {
   maxGames: number
 }
 
-export function scoreFormConfig(format: MatchFormat): ScoreFormConfig {
-  return format === 'best-of-three' ? { setOptions: [2, 3], maxGames: 7 } : { setOptions: [1], maxGames: 9 }
+export function scoreFormConfig(format: ProfileFormat): ScoreFormConfig {
+  const needed = Math.ceil(format.sets / 2)
+  const setOptions =
+    format.sets === 1 ? [1] : Array.from({ length: format.sets - needed + 1 }, (_, index) => needed + index)
+  return { setOptions, maxGames: format.games + (format.tieBreak && format.advantage ? 1 : 0) }
 }
 
-export function validateScore(format: MatchFormat, sets: readonly ScoreSet[]): ScoreValidation {
-  if (format !== 'one-set-nine' && format !== 'best-of-three') return { ok: false, message: 'Formato de partido invalido' }
+export function validateScore(format: ProfileFormat, sets: readonly ScoreSet[]): ScoreValidation {
   if (!Array.isArray(sets)) return { ok: false, message: 'El marcador no es valido' }
-  const validLength = format === 'one-set-nine' ? sets.length === 1 : sets.length === 2 || sets.length === 3
-  if (!validLength) return { ok: false, message: 'La cantidad de sets no es valida' }
-
-  const validSet = format === 'one-set-nine' ? validShortSet : validLongSet
-  if (sets.some((set) => !validSet(set))) return { ok: false, message: 'El marcador no es valido' }
-
-  if (format === 'best-of-three' && sets.length === 3) {
-    const firstTwoHomeWins = sets.slice(0, 2).filter((set) => set.home > set.away).length
-    if (firstTwoHomeWins === 0 || firstTwoHomeWins === 2) {
-      return { ok: false, message: 'La serie termino antes del ultimo set' }
-    }
-  }
+  const needed = Math.ceil(format.sets / 2)
+  if (sets.length < needed || sets.length > format.sets) return { ok: false, message: 'La cantidad de sets no es valida' }
+  if (sets.some((set) => !validSet(set, format))) return { ok: false, message: 'El marcador no es valido' }
 
   const homeSets = sets.filter((set) => set.home > set.away).length
   const awaySets = sets.length - homeSets
   if (homeSets === awaySets) return { ok: false, message: 'El marcador debe tener un ganador' }
-  if (format === 'best-of-three' && Math.max(homeSets, awaySets) !== 2) {
-    return { ok: false, message: 'La serie debe tener dos sets ganados' }
+  if (Math.max(homeSets, awaySets) !== needed) {
+    return { ok: false, message: `La serie debe tener ${needed} sets ganados` }
   }
 
-  return { ok: true, winner: homeSets > awaySets ? 'home' : 'away' }
+  const winner = homeSets > awaySets ? 'home' : 'away'
+  const lastSet = sets[sets.length - 1]!
+  const lastWinner = lastSet.home > lastSet.away ? 'home' : 'away'
+  if (lastWinner !== winner) return { ok: false, message: 'La serie termino antes del ultimo set' }
+
+  return { ok: true, winner }
 }

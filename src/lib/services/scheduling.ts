@@ -163,7 +163,7 @@ async function replanWith(database: SchedulingDatabase, tournamentId: string, fr
     .filter((match) => OPEN_STATES.includes(match.state) && (teams.get(match.id) ?? []).length === 2)
     .map((match) => ({
       id: match.id,
-      format: match.format,
+      profile: match.format === 'best-of-three' ? 'finals' : 'regular',
       participantIds: participants.get(match.id) ?? [],
       readyAt: readiness.get(match.id) ?? from,
       dependentCount: dependentCounts.get(match.id) ?? 0,
