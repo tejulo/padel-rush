@@ -1,11 +1,12 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/auth/guards'
 import { proposeTeams } from '@/lib/domain/pairing'
 import { TeamLockForm, TeamProposal, ReturnTournamentToDraftForm, StartTournamentForm } from '@/components/panel/team-proposal'
+import { TournamentNav } from '@/components/panel/tournament-nav'
 import { getParticipants } from '@/lib/services/participants'
 import { getTournamentTeams } from '@/lib/services/teams'
 import { assertTournamentOwner, getTournament } from '@/lib/services/tournaments'
+import { categoryLabel, categoryStateLabel, categoryTint } from '@/lib/ui/labels'
 
 export default async function TeamsPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const user = await requireUser()
@@ -25,22 +26,26 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
   const editable = tournament.state === 'draft'
 
   return (
-    <section>
-      <p>
-        <Link href={`/tournaments/${tournament.id}`}>Volver al torneo</Link>
+    <section className="stack">
+      <TournamentNav tournamentId={tournament.id} current="teams" back />
+      <h1 className="eyebrow tint-peach">Parejas de {tournament.name}</h1>
+      <p className="meta">
+        Las propuestas compensan niveles altos y bajos. Los cambios manuales muestran una advertencia, pero no bloquean el
+        guardado.
       </p>
-      <h1>Parejas de {tournament.name}</h1>
-      <p>Las propuestas compensan niveles altos y bajos. Los cambios manuales muestran una advertencia, pero no bloquean el guardado.</p>
       {categoryRows.map((category) => {
         const registeredParticipants = participantRows
           .filter((participant) => participant.categories.includes(category.category))
           .map(({ id, name, gender, level }) => ({ id, name, gender, level }))
         const proposals = proposeTeams(category.category, registeredParticipants)
         return (
-          <section key={category.id}>
-            <p>Estado: {category.state}</p>
+          <section key={category.id} className="stack">
+            <h2 className={`eyebrow eyebrow--sm tint-${categoryTint(category.category)}`}>
+              {categoryLabel(category.category)}
+            </h2>
+            <p className="meta">Estado: {categoryStateLabel(category.state)}</p>
             {category.state === 'cancelled' ? (
-              <p>Esta categoria fue cancelada.</p>
+              <p className="empty">Esta categoria fue cancelada.</p>
             ) : (
               <>
                 {proposals.unpairedParticipantIds.length > 0 ? (
@@ -51,7 +56,6 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
                 <TeamProposal
                   tournamentId={tournament.id}
                   categoryId={category.id}
-                  category={category.category}
                   version={category.version}
                   editable={editable && category.state === 'draft'}
                   participants={registeredParticipants}

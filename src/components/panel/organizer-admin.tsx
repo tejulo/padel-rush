@@ -10,6 +10,7 @@ import {
 } from '@/app/actions/organizers'
 import { ProfileFields } from '@/components/panel/tournament-form'
 import type { FormatConfig } from '@/lib/domain/format'
+import { organizerStateLabel } from '@/lib/ui/labels'
 
 const initialState: ActionState = {}
 
@@ -33,9 +34,9 @@ export function OrganizerAdmin({
   const [settingsState, settingsAction, settingsPending] = useActionState(saveSettingsAction, initialState)
 
   return (
-    <div>
-      <form action={createAction}>
-        <h2>Nuevo organizador</h2>
+    <div className="stack">
+      <h2 className="section-title">Nuevo organizador</h2>
+      <form action={createAction} className="card card--pad">
         <label>
           Usuario nuevo
           <input name="username" required />
@@ -51,42 +52,45 @@ export function OrganizerAdmin({
         {createState.success ? <p role="status">{createState.success}</p> : null}
       </form>
 
-      <h2>Cuentas</h2>
-      <ul>
+      <h2 className="section-title">Cuentas</h2>
+      <ul className="plain-list">
         {organizers.map((organizer) => (
           <li key={organizer.id}>
-            <p>
-              {organizer.username} - {organizer.state}
-            </p>
-            <form action={resetAction}>
-              <input type="hidden" name="organizerId" value={organizer.id} />
-              <label>
-                Nueva contrasena
-                <input name="password" type="password" minLength={12} required />
-              </label>
-              <button type="submit" disabled={resetPending}>
-                Restablecer contrasena
-              </button>
-            </form>
-            <form action={deactivateAction}>
-              <input type="hidden" name="organizerId" value={organizer.id} />
-              <label>
-                Reasignar torneos activos a
-                <select name="replacementOrganizerId" defaultValue="">
-                  <option value="">Sin reasignacion</option>
-                  {organizers
-                    .filter((candidate) => candidate.id !== organizer.id && candidate.state === 'active')
-                    .map((candidate) => (
-                      <option key={candidate.id} value={candidate.id}>
-                        {candidate.username}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <button type="submit" disabled={deactivatePending}>
-                Desactivar
-              </button>
-            </form>
+            <article className="card">
+              <h3 className="card-title">{organizer.username}</h3>
+              <div className="card-body">
+                <p className="meta">Estado: {organizerStateLabel(organizer.state)}</p>
+                <form action={resetAction} className="subform">
+                  <input type="hidden" name="organizerId" value={organizer.id} />
+                  <label>
+                    Nueva contrasena
+                    <input name="password" type="password" minLength={12} required />
+                  </label>
+                  <button type="submit" className="secondary" disabled={resetPending}>
+                    Restablecer contrasena
+                  </button>
+                </form>
+                <form action={deactivateAction} className="subform">
+                  <input type="hidden" name="organizerId" value={organizer.id} />
+                  <label>
+                    Reasignar torneos activos a
+                    <select name="replacementOrganizerId" defaultValue="">
+                      <option value="">Sin reasignacion</option>
+                      {organizers
+                        .filter((candidate) => candidate.id !== organizer.id && candidate.state === 'active')
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.username}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <button type="submit" className="caution" disabled={deactivatePending}>
+                    Desactivar
+                  </button>
+                </form>
+              </div>
+            </article>
           </li>
         ))}
       </ul>
@@ -95,8 +99,8 @@ export function OrganizerAdmin({
       {deactivateState.error ? <p role="alert">{deactivateState.error}</p> : null}
       {deactivateState.success ? <p role="status">{deactivateState.success}</p> : null}
 
-      <form action={settingsAction}>
-        <h2>Ajustes predeterminados</h2>
+      <h2 className="section-title">Ajustes predeterminados</h2>
+      <form action={settingsAction} className="card card--pad form-grid">
         <label>
           Hora limite
           <input name="endsAt" type="time" defaultValue={settings.endsAt} required />

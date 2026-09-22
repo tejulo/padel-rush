@@ -27,7 +27,6 @@ function teamTotal(team: DraftTeam, participants: readonly PairingParticipant[])
 export function TeamProposal({
   tournamentId,
   categoryId,
-  category,
   version,
   editable,
   participants,
@@ -36,7 +35,6 @@ export function TeamProposal({
 }: {
   tournamentId: string
   categoryId: string
-  category: 'men' | 'women' | 'mixed'
   version: number
   editable: boolean
   participants: PairingParticipant[]
@@ -71,11 +69,10 @@ export function TeamProposal({
   }
 
   return (
-    <article>
-      <h3>{category === 'men' ? 'Masculino' : category === 'women' ? 'Femenino' : 'Mixto'}</h3>
-      {proposals.length === 0 ? <p>No hay suficientes inscriptos para proponer parejas.</p> : null}
+    <article className="stack">
+      {proposals.length === 0 ? <p className="empty">No hay suficientes inscriptos para proponer parejas.</p> : null}
       {proposals.length > 0 && proposals.some((proposal) => proposal.levelTotal !== totals[proposals.indexOf(proposal)]) ? (
-        <p>La propuesta combina niveles para reducir la diferencia entre parejas.</p>
+        <p role="status">La propuesta combina niveles para reducir la diferencia entre parejas.</p>
       ) : null}
       {editable ? (
         <form action={formAction}>
@@ -83,47 +80,55 @@ export function TeamProposal({
           <input type="hidden" name="categoryId" value={categoryId} />
           <input type="hidden" name="version" value={version} />
           <input type="hidden" name="teams" value={JSON.stringify(draftTeams)} />
-          <div>
+          <div className="card-grid">
             {draftTeams.map((team, teamIndex) => (
-              <fieldset key={`${team.name ?? 'pareja'}-${teamIndex}`}>
-                <legend>{team.name ?? `Pareja ${teamIndex + 1}`} ({totals[teamIndex] ?? 0})</legend>
-                {[0, 1].map((memberIndex) => (
-                  <label key={memberIndex}>
-                    Integrante {memberIndex + 1}
-                    <select
-                      value={team.memberIds[memberIndex] ?? ''}
-                      onChange={(event) => updateMember(teamIndex, memberIndex, event.target.value)}
-                    >
-                      <option value="">Seleccionar participante</option>
-                      {participants.map((participant) => (
-                        <option key={participant.id} value={participant.id}>
-                          {participant.name ?? participant.id} (nivel {participant.level})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-                <button type="button" onClick={() => removeTeam(teamIndex)} disabled={pending}>
-                  Quitar pareja
-                </button>
+              <fieldset key={`${team.name ?? 'pareja'}-${teamIndex}`} className="card">
+                <legend>
+                  {team.name ?? `Pareja ${teamIndex + 1}`} ({totals[teamIndex] ?? 0})
+                </legend>
+                <div className="card-body">
+                  {[0, 1].map((memberIndex) => (
+                    <label key={memberIndex}>
+                      Integrante {memberIndex + 1}
+                      <select
+                        value={team.memberIds[memberIndex] ?? ''}
+                        onChange={(event) => updateMember(teamIndex, memberIndex, event.target.value)}
+                      >
+                        <option value="">Seleccionar participante</option>
+                        {participants.map((participant) => (
+                          <option key={participant.id} value={participant.id}>
+                            {participant.name ?? participant.id} (nivel {participant.level})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                  <button type="button" className="secondary" onClick={() => removeTeam(teamIndex)} disabled={pending}>
+                    Quitar pareja
+                  </button>
+                </div>
               </fieldset>
             ))}
           </div>
           {spread > 2 ? <p role="status">Advertencia: los niveles de las parejas estan desbalanceados.</p> : null}
           {state.error ? <p role="alert">{state.error}</p> : null}
           {state.success ? <p role="status">{state.success}</p> : null}
-          <button type="button" onClick={addTeam} disabled={pending}>
-            Agregar pareja
-          </button>
-          <button type="submit" disabled={pending}>
-            {pending ? 'Guardando...' : 'Guardar parejas'}
-          </button>
+          <div className="action-row">
+            <button type="button" className="secondary" onClick={addTeam} disabled={pending}>
+              Agregar pareja
+            </button>
+            <button type="submit" disabled={pending}>
+              {pending ? 'Guardando...' : 'Guardar parejas'}
+            </button>
+          </div>
         </form>
       ) : (
-        <ul>
+        <ul className="plain-list">
           {savedTeams.map((team) => (
             <li key={team.id}>
-              {team.name}: {team.members.map((member) => member.name ?? member.id).join(' y ')} ({team.levelTotal})
+              <p className="meta">
+                {team.name}: {team.members.map((member) => member.name ?? member.id).join(' y ')} ({team.levelTotal})
+              </p>
             </li>
           ))}
         </ul>
@@ -135,7 +140,7 @@ export function TeamProposal({
           <input type="hidden" name="tournamentId" value={tournamentId} />
           <input type="hidden" name="categoryId" value={categoryId} />
           <input type="hidden" name="version" value={version} />
-          <button type="submit" disabled={cancelPending}>
+          <button type="submit" className="caution" disabled={cancelPending}>
             {cancelPending ? 'Cancelando...' : 'Cancelar categoria'}
           </button>
         </form>
@@ -165,7 +170,7 @@ export function ReturnTournamentToDraftForm({ tournamentId }: { tournamentId: st
       <input type="hidden" name="tournamentId" value={tournamentId} />
       {state.error ? <p role="alert">{state.error}</p> : null}
       {state.success ? <p role="status">{state.success}</p> : null}
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="secondary" disabled={pending}>
         {pending ? 'Volviendo...' : 'Volver a borrador'}
       </button>
     </form>

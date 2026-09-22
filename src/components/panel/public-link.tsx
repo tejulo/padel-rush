@@ -9,14 +9,14 @@ export function PublicLink({ tournamentId, version, publicToken }: { tournamentI
   const [state, action, pending] = useActionState(regeneratePublicLinkAction, initialState)
 
   return (
-    <div>
+    <div className="stack">
       <p>
         Enlace publico: <a href={`/public/${publicToken}`}>/public/{publicToken}</a>
       </p>
       <form action={action}>
         <input type="hidden" name="id" value={tournamentId} />
         <input type="hidden" name="version" value={version} />
-        <button type="submit" disabled={pending}>
+        <button type="submit" className="caution" disabled={pending}>
           {pending ? 'Regenerando...' : 'Regenerar enlace publico'}
         </button>
       </form>

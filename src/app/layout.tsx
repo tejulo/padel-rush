@@ -10,7 +10,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <div className="frame">
+          {children}
+          <footer className="site-footer">
+            <p>Padel Rush - Gestion de torneos relampago de padel</p>
+          </footer>
+        </div>
+      </body>
     </html>
   )
 }

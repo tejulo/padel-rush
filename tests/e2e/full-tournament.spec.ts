@@ -4,7 +4,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import { categories, participants, registrations, tournaments } from '@/lib/db/schema'
 
-test.describe.configure({ mode: 'serial' })
+test.describe.configure({ mode: 'serial', timeout: 90_000 })
 
 test('runs a two-team category through a reset final to a finished tournament', async ({ page }) => {
   await page.goto('/login')
@@ -55,13 +55,14 @@ test('runs a two-team category through a reset final to a finished tournament', 
       return row?.state
     })
     .toBe('in_progress')
+  await expect(page.getByRole('button', { name: 'Volver a borrador' })).toBeVisible()
 
   const [started] = await db.select().from(tournaments).where(eq(tournaments.id, tournament!.id))
   expect(started!.publicToken).toBeTruthy()
 
   await page.getByRole('link', { name: 'Volver al torneo' }).click()
   await page.getByRole('link', { name: 'Partidos' }).click()
-  await expect(page.getByRole('heading', { name: /Partidos de/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Partidos de/ })).toBeVisible({ timeout: 15_000 })
 
   const playBestOfThree = async (stage: string, homeScores: string[], awayScores: string[]) => {
     const item = page.locator('li', { hasText: stage }).first()

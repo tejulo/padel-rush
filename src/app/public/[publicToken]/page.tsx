@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { SiteBanner } from '@/components/site-banner'
 import { TournamentView } from '@/components/public/tournament-view'
 import { getPublicTournament } from '@/lib/services/public'
 
@@ -8,8 +9,11 @@ export default async function PublicTournamentPage({ params }: { params: Promise
   if (!tournament) notFound()
 
   return (
-    <main>
-      <TournamentView tournament={tournament} />
-    </main>
+    <>
+      <SiteBanner />
+      <main className="site-main">
+        <TournamentView tournament={tournament} />
+      </main>
+    </>
   )
 }

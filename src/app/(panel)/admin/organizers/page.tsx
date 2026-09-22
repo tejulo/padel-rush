@@ -9,11 +9,11 @@ export default async function OrganizersPage() {
   const [organizers, settings] = await Promise.all([listOrganizers(), getGlobalSettings()])
 
   return (
-    <section>
-      <p>
+    <section className="stack">
+      <p className="backlink">
         <Link href="/">Volver a torneos</Link>
       </p>
-      <h1>Organizadores</h1>
+      <h1 className="eyebrow tint-steel">Organizadores</h1>
       <OrganizerAdmin organizers={organizers} settings={settings} />
     </section>
   )

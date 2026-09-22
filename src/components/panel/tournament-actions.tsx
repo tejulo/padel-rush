@@ -22,25 +22,27 @@ export function TournamentActions({
   const canDelete = isAdmin ? state === 'finished' || state === 'cancelled' : state === 'draft'
 
   return (
-    <div>
-      {canCancel ? (
-        <form action={cancelAction}>
-          <input type="hidden" name="id" value={tournamentId} />
-          <input type="hidden" name="version" value={version} />
-          <button type="submit" disabled={cancelPending}>
-            {cancelPending ? 'Cancelando...' : 'Cancelar torneo'}
-          </button>
-        </form>
-      ) : null}
-      {canDelete ? (
-        <form action={deleteAction}>
-          <input type="hidden" name="id" value={tournamentId} />
-          <input type="hidden" name="version" value={version} />
-          <button type="submit" disabled={deletePending}>
-            {deletePending ? 'Eliminando...' : 'Eliminar torneo'}
-          </button>
-        </form>
-      ) : null}
+    <div className="stack">
+      <div className="action-row">
+        {canCancel ? (
+          <form action={cancelAction}>
+            <input type="hidden" name="id" value={tournamentId} />
+            <input type="hidden" name="version" value={version} />
+            <button type="submit" className="caution" disabled={cancelPending}>
+              {cancelPending ? 'Cancelando...' : 'Cancelar torneo'}
+            </button>
+          </form>
+        ) : null}
+        {canDelete ? (
+          <form action={deleteAction}>
+            <input type="hidden" name="id" value={tournamentId} />
+            <input type="hidden" name="version" value={version} />
+            <button type="submit" className="caution" disabled={deletePending}>
+              {deletePending ? 'Eliminando...' : 'Eliminar torneo'}
+            </button>
+          </form>
+        ) : null}
+      </div>
       {cancelState.error ? <p role="alert">{cancelState.error}</p> : null}
       {cancelState.success ? <p role="status">{cancelState.success}</p> : null}
       {deleteState.error ? <p role="alert">{deleteState.error}</p> : null}

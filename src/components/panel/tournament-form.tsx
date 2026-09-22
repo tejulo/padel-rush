@@ -32,7 +32,7 @@ export function TournamentForm({
   const locked = tournament?.state !== undefined && tournament.state !== 'draft'
 
   return (
-    <form action={formAction}>
+    <form action={formAction} className="card card--pad form-grid">
       {tournament ? (
         <>
           <input type="hidden" name="id" value={tournament.id} />
