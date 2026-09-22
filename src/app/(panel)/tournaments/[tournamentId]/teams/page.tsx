@@ -24,6 +24,12 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
     getTournamentTeams(tournament.id),
   ])
   const editable = tournament.state === 'draft'
+  const activeCategoryNames = categoryRows
+    .filter((category) => category.state !== 'cancelled')
+    .map((category) => category.category)
+  const withoutRegistration = participantRows.filter(
+    (participant) => !participant.categories.some((category) => activeCategoryNames.includes(category)),
+  )
 
   return (
     <section className="stack">
@@ -33,6 +39,12 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
         Las propuestas compensan niveles altos y bajos. Los cambios manuales muestran una advertencia, pero no bloquean el
         guardado.
       </p>
+      {withoutRegistration.length > 0 ? (
+        <p role="status">
+          Sin inscripcion en categorias activas: {withoutRegistration.map((participant) => participant.name).join(', ')}.
+          No entran en las propuestas de parejas.
+        </p>
+      ) : null}
       {categoryRows.map((category) => {
         const registeredParticipants = participantRows
           .filter((participant) => participant.categories.includes(category.category))
@@ -50,7 +62,13 @@ export default async function TeamsPage({ params }: { params: Promise<{ tourname
               <>
                 {proposals.unpairedParticipantIds.length > 0 ? (
                   <p role="status">
-                    Participantes sin pareja propuesta: {proposals.unpairedParticipantIds.join(', ')}
+                    Participantes sin pareja propuesta:{' '}
+                    {proposals.unpairedParticipantIds
+                      .map((id) => {
+                        const participant = registeredParticipants.find((row) => row.id === id)
+                        return participant ? `${participant.name} (nivel ${participant.level})` : id
+                      })
+                      .join(', ')}
                   </p>
                 ) : null}
                 <TeamProposal
