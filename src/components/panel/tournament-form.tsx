@@ -30,7 +30,7 @@ export function TournamentForm({
   const locked = tournament?.state !== undefined && tournament.state !== 'draft'
 
   return (
-    <form action={formAction}>
+    <form action={formAction} className="card card--pad form-grid">
       {tournament ? (
         <>
           <input type="hidden" name="id" value={tournament.id} />
@@ -103,7 +103,7 @@ export function TournamentForm({
           disabled={locked}
         />
       </label>
-      <fieldset>
+      <fieldset className="fieldset--flat">
         <legend>Canchas habilitadas</legend>
         <label>
           <input type="radio" name="enabledCourtCount" value="2" defaultChecked={enabledCourtCount === 2} />

@@ -12,7 +12,7 @@ export function RefreshButton() {
   }, [router])
 
   return (
-    <button type="button" onClick={() => router.refresh()}>
+    <button type="button" className="secondary" onClick={() => router.refresh()}>
       Actualizar ahora
     </button>
   )

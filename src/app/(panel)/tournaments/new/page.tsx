@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { requireUser } from '@/lib/auth/guards'
 import { TournamentForm } from '@/components/panel/tournament-form'
 import { getGlobalSettings } from '@/lib/services/settings'
@@ -11,8 +12,11 @@ export default async function NewTournamentPage() {
   ])
 
   return (
-    <section>
-      <h1>Nuevo torneo</h1>
+    <section className="stack">
+      <p className="backlink">
+        <Link href="/">Volver a torneos</Link>
+      </p>
+      <h1 className="eyebrow tint-lime">Nuevo torneo</h1>
       <TournamentForm isAdmin={user.role === 'admin'} organizers={organizers} defaults={defaults} />
     </section>
   )

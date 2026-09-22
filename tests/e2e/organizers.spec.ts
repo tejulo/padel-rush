@@ -27,7 +27,8 @@ test('administrator manages organizer accounts and global defaults', async ({ pa
   await page.getByLabel('Usuario nuevo').fill(username)
   await page.getByLabel('Contrasena nueva').fill('seguro-padel-1')
   await page.getByRole('button', { name: 'Crear organizador' }).click()
-  await expect(page.getByText(`${username} - active`)).toBeVisible()
+  const account = page.locator('li', { has: page.getByRole('heading', { name: username }) })
+  await expect(account.getByText('Estado: Activo')).toBeVisible()
 
   await page.getByRole('button', { name: 'Guardar ajustes' }).click()
   await expect(page.getByText('Ajustes guardados')).toBeVisible()

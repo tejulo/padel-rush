@@ -1,7 +1,7 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/auth/guards'
 import { ParticipantForm } from '@/components/panel/participant-form'
+import { TournamentNav } from '@/components/panel/tournament-nav'
 import { getParticipants } from '@/lib/services/participants'
 import { assertTournamentOwner, getTournament } from '@/lib/services/tournaments'
 
@@ -19,18 +19,20 @@ export default async function ParticipantsPage({ params }: { params: Promise<{ t
   const draft = tournament.state === 'draft'
 
   return (
-    <section>
-      <p>
-        <Link href={`/tournaments/${tournament.id}`}>Volver al torneo</Link>
-      </p>
-      <h1>Participantes de {tournament.name}</h1>
-      {!draft ? <p>Las inscripciones estan bloqueadas.</p> : null}
+    <section className="stack">
+      <TournamentNav tournamentId={tournament.id} current="participants" back />
+      <h1 className="eyebrow tint-sky">Participantes de {tournament.name}</h1>
+      {!draft ? <p className="notice">Las inscripciones estan bloqueadas.</p> : null}
       {draft ? <ParticipantForm tournamentId={tournament.id} draft /> : null}
-      <div>
-        {participantRows.map((participant) => (
-          <ParticipantForm key={participant.id} tournamentId={tournament.id} participant={participant} draft={draft} />
-        ))}
-      </div>
+      {participantRows.length === 0 ? (
+        <p className="empty">Sin participantes inscriptos.</p>
+      ) : (
+        <div className="card-grid">
+          {participantRows.map((participant) => (
+            <ParticipantForm key={participant.id} tournamentId={tournament.id} participant={participant} draft={draft} />
+          ))}
+        </div>
+      )}
     </section>
   )
 }

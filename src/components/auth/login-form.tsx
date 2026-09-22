@@ -9,7 +9,7 @@ export function LoginForm() {
   const [state, action, pending] = useActionState(signInAction, initialState)
 
   return (
-    <form action={action}>
+    <form action={action} className="card card--pad">
       <label htmlFor="username">Usuario</label>
       <input id="username" name="username" required autoComplete="username" />
       <label htmlFor="password">Contrasena</label>

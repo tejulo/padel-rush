@@ -12,28 +12,16 @@ import {
 } from '@/app/actions/matches'
 import { scoreFormConfig } from '@/lib/domain/scoring'
 import type { MatchBoardEntry, MatchBoardTeam } from '@/lib/services/matches'
+import {
+  categoryLabel,
+  courtTint,
+  matchStageLabel,
+  matchStateLabel,
+  matchTint,
+  MATCH_REASON_LABELS,
+} from '@/lib/ui/labels'
 
 const initialState: ActionState = {}
-
-const STATE_LABELS: Record<string, string> = {
-  pending: 'pendiente',
-  scheduled: 'programado',
-  in_progress: 'en juego',
-  completed: 'finalizado',
-  forfeit: 'derrota automatica',
-  cancelled: 'cancelado',
-}
-
-const STAGE_LABELS: Record<string, string> = {
-  'winners-round': 'Cuadro de ganadores',
-  'winners-final': 'Final de ganadores',
-  'losers-round': 'Cuadro de perdedores',
-  'losers-final': 'Final de perdedores',
-  'grand-final': 'Gran final',
-  'grand-final-reset': 'Reinicio de gran final',
-}
-
-const CATEGORY_LABELS: Record<string, string> = { men: 'Masculino', women: 'Femenino', mixed: 'Mixto' }
 
 function formatScore(score: unknown): string {
   if (!Array.isArray(score)) return ''
@@ -42,6 +30,11 @@ function formatScore(score: unknown): string {
 
 function courtKey(entry: MatchBoardEntry): string {
   return entry.courtName ?? 'Sin cancha'
+}
+
+function reasonLabel(reason: string): string | null {
+  if (reason === 'absence' || reason === 'retirement') return MATCH_REASON_LABELS[reason]
+  return null
 }
 
 export function MatchBoard({
@@ -54,7 +47,7 @@ export function MatchBoard({
   enabledCourts: { id: string; name: string }[]
 }) {
   const [selected, setSelected] = useState<string | null>(null)
-  if (matches.length === 0) return <p>No hay partidos generados.</p>
+  if (matches.length === 0) return <p className="empty">No hay partidos generados.</p>
 
   const sorted = [...matches].sort((left, right) => {
     const leftTime = left.match.scheduledStartAt?.getTime() ?? Number.MAX_SAFE_INTEGER
@@ -69,7 +62,7 @@ export function MatchBoard({
   const warningCount = matches.filter((entry) => entry.afterEndWarning).length
 
   return (
-    <div>
+    <div className="stack">
       {warningCount > 0 ? (
         <p role="alert">
           {warningCount === 1
@@ -77,34 +70,41 @@ export function MatchBoard({
             : `${warningCount} partidos terminan despues de la hora limite del torneo.`}
         </p>
       ) : null}
-      {[...groups.entries()].map(([court, entries]) => (
-        <section key={court}>
-          <h2>{court}</h2>
-          <ol>
+      {[...groups.entries()].map(([court, entries], courtIndex) => (
+        <section key={court} className="stack">
+          <h2 className={`eyebrow eyebrow--sm tint-${courtTint(courtIndex)}`}>{court}</h2>
+          <ol className="match-list">
             {entries.map((entry) => {
               const { match } = entry
               const canOperate = match.state === 'scheduled' || match.state === 'in_progress'
               const canMove = match.state === 'pending' || match.state === 'scheduled'
               const isSelected = selected === match.id
+              const reason = match.resultReason ? reasonLabel(match.resultReason) : null
               return (
                 <li key={match.id}>
-                  <p>
-                    {entry.scheduledStartLabel ?? 'sin horario'} - <strong>{CATEGORY_LABELS[entry.category.category]}</strong> -{' '}
-                    {STAGE_LABELS[match.stage] ?? match.stage} - {STATE_LABELS[match.state] ?? match.state}
-                  </p>
-                  <p>
-                    {entry.homeTeam?.name ?? 'por definir'} vs {entry.awayTeam?.name ?? 'por definir'}
-                  </p>
-                  {entry.afterEndWarning ? <p role="alert">Termina despues de la hora limite del torneo.</p> : null}
-                  {match.score ? <p>Marcador: {formatScore(match.score)}</p> : null}
-                  {match.resultReason && match.resultReason !== 'conditional-reset' ? (
-                    <p>{match.resultReason === 'absence' ? 'Ausencia' : 'Retiro'}</p>
-                  ) : null}
-                  {canOperate || canMove ? (
-                    <button type="button" onClick={() => setSelected(isSelected ? null : match.id)}>
-                      {isSelected ? 'Cerrar' : 'Operar partido'}
-                    </button>
-                  ) : null}
+                  <article className="card">
+                    <h3 className="card-title">
+                      {entry.scheduledStartLabel ?? 'sin horario'} - {categoryLabel(entry.category.category)} -{' '}
+                      {matchStageLabel(match.stage)}
+                    </h3>
+                    <div className={`card-body tint-${matchTint(match.state)}`}>
+                      <p className="match-teams">
+                        <strong>{entry.homeTeam?.name ?? 'por definir'}</strong> vs{' '}
+                        <strong>{entry.awayTeam?.name ?? 'por definir'}</strong>
+                      </p>
+                      {match.score ? <p className="match-score">Marcador: {formatScore(match.score)}</p> : null}
+                      <p className="meta">
+                        Estado: <strong>{matchStateLabel(match.state)}</strong>
+                        {reason ? ` | ${reason}` : null}
+                      </p>
+                      {entry.afterEndWarning ? <p role="alert">Termina despues de la hora limite del torneo.</p> : null}
+                      {canOperate || canMove ? (
+                        <button type="button" className="secondary" onClick={() => setSelected(isSelected ? null : match.id)}>
+                          {isSelected ? 'Cerrar' : 'Operar partido'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
                   {isSelected ? (
                     <MatchOperations
                       match={match}
@@ -135,12 +135,11 @@ function SubstitutionForm({
   const [state, action, pending] = useActionState(substitutePlayerAction, initialState)
 
   return (
-    <form action={action}>
+    <form action={action} className="ops-form">
       <input type="hidden" name="teamId" value={team.id} />
       <input type="hidden" name="version" value={team.version} />
-      <p>
-        Sustitucion en {team.name} (disponible antes de su primer partido)
-      </p>
+      <h4 className="ops-title">Sustitucion</h4>
+      <p className="meta">En {team.name} · disponible antes de su primer partido</p>
       <label>
         Sale
         <select name="outgoingParticipantId" required defaultValue="">
@@ -204,9 +203,9 @@ function MatchOperations({
   const substitutable = [homeTeam, awayTeam].filter((team): team is MatchBoardTeam => Boolean(team?.eligibleForSubstitution))
 
   return (
-    <div>
+    <div className="ops">
       {match.state === 'scheduled' ? (
-        <form action={startAction}>
+        <form action={startAction} className="ops-form">
           <input type="hidden" name="matchId" value={match.id} />
           <input type="hidden" name="version" value={match.version} />
           <button type="submit" disabled={startPending}>
@@ -215,9 +214,10 @@ function MatchOperations({
         </form>
       ) : null}
       {match.state === 'scheduled' || match.state === 'in_progress' ? (
-        <form action={resultAction}>
+        <form action={resultAction} className="ops-form">
           <input type="hidden" name="matchId" value={match.id} />
           <input type="hidden" name="version" value={match.version} />
+          <h4 className="ops-title">Registrar resultado</h4>
           {resultForm.setOptions.length > 1 ? (
             <label>
               Sets
@@ -230,19 +230,21 @@ function MatchOperations({
               </select>
             </label>
           ) : (
-            <p>Un set a 9 juegos.</p>
+            <p className="meta">Un set a 9 juegos.</p>
           )}
           {Array.from({ length: sets }, (_, index) => (
-            <fieldset key={index}>
+            <fieldset key={index} className="card">
               <legend>Set {index + 1}</legend>
-              <label>
-                {homeTeam?.name ?? 'Local'}
-                <input name={`home-${index}`} type="number" min="0" max={resultForm.maxGames} required />
-              </label>
-              <label>
-                {awayTeam?.name ?? 'Visitante'}
-                <input name={`away-${index}`} type="number" min="0" max={resultForm.maxGames} required />
-              </label>
+              <div className="card-body set-grid">
+                <label>
+                  {homeTeam?.name ?? 'Local'}
+                  <input name={`home-${index}`} type="number" min="0" max={resultForm.maxGames} required />
+                </label>
+                <label>
+                  {awayTeam?.name ?? 'Visitante'}
+                  <input name={`away-${index}`} type="number" min="0" max={resultForm.maxGames} required />
+                </label>
+              </div>
             </fieldset>
           ))}
           <button type="submit" disabled={resultPending}>
@@ -251,9 +253,10 @@ function MatchOperations({
         </form>
       ) : null}
       {match.state === 'scheduled' || match.state === 'in_progress' ? (
-        <form action={forfeitAction}>
+        <form action={forfeitAction} className="ops-form">
           <input type="hidden" name="matchId" value={match.id} />
           <input type="hidden" name="version" value={match.version} />
+          <h4 className="ops-title">Registrar derrota automatica</h4>
           <label>
             Equipo que no se presenta
             <select name="forfeitTeamId" required>
@@ -269,40 +272,43 @@ function MatchOperations({
               <option value="retirement">Retiro</option>
             </select>
           </label>
-          <button type="submit" disabled={forfeitPending}>
+          <button type="submit" className="caution" disabled={forfeitPending}>
             {forfeitPending ? 'Guardando...' : 'Registrar derrota automatica'}
           </button>
         </form>
       ) : null}
       {match.state === 'pending' || match.state === 'scheduled' ? (
-        <form action={moveAction}>
+        <form action={moveAction} className="ops-form">
           <input type="hidden" name="matchId" value={match.id} />
           <input type="hidden" name="version" value={match.version} />
           <input type="hidden" name="tournamentId" value={tournamentId} />
-          <label>
-            Cancha
-            <select name="courtId" defaultValue={enabledCourts[0]?.id ?? ''} required>
-              {enabledCourts.map((court) => (
-                <option key={court.id} value={court.id}>
-                  {court.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Nueva hora
-            <input name="startsAt" type="datetime-local" required />
-          </label>
-          <button type="submit" disabled={movePending}>
+          <h4 className="ops-title">Mover partido</h4>
+          <div className="field-row">
+            <label>
+              Cancha
+              <select name="courtId" defaultValue={enabledCourts[0]?.id ?? ''} required>
+                {enabledCourts.map((court) => (
+                  <option key={court.id} value={court.id}>
+                    {court.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Nueva hora
+              <input name="startsAt" type="datetime-local" required />
+            </label>
+          </div>
+          <button type="submit" className="secondary" disabled={movePending}>
             {movePending ? 'Moviendo...' : 'Mover partido'}
           </button>
         </form>
       ) : null}
       {match.state === 'completed' || match.state === 'forfeit' ? (
-        <form action={clearAction}>
+        <form action={clearAction} className="ops-form">
           <input type="hidden" name="matchId" value={match.id} />
           <input type="hidden" name="version" value={match.version} />
-          <button type="submit" disabled={clearPending}>
+          <button type="submit" className="caution" disabled={clearPending}>
             {clearPending ? 'Corrigiendo...' : 'Corregir resultado'}
           </button>
         </form>
