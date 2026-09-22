@@ -10,6 +10,7 @@ export interface GlobalSettings {
   shortMatchMinutes: number
   longMatchMinutes: number
   restMinutes: number
+  courtCount: number
   formatConfig: FormatConfig
 }
 
@@ -21,11 +22,15 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
     shortMatchMinutes: value.shortMatchMinutes ?? tournamentDefaults.shortMatchMinutes,
     longMatchMinutes: value.longMatchMinutes ?? tournamentDefaults.longMatchMinutes,
     restMinutes: value.restMinutes ?? tournamentDefaults.restMinutes,
+    courtCount: value.courtCount ?? tournamentDefaults.courtCount,
     formatConfig: parseFormatConfig(value.formatConfig ?? defaultFormatConfig()),
   }
 }
 
-type SaveGlobalSettingsInput = Omit<GlobalSettings, 'formatConfig'> & { formatConfig?: FormatConfig }
+type SaveGlobalSettingsInput = Omit<GlobalSettings, 'formatConfig' | 'courtCount'> & {
+  formatConfig?: FormatConfig
+  courtCount?: number
+}
 
 export async function saveGlobalSettings(input: SaveGlobalSettingsInput): Promise<GlobalSettings> {
   await requireRole('admin')
@@ -33,6 +38,10 @@ export async function saveGlobalSettings(input: SaveGlobalSettingsInput): Promis
   if (!Number.isInteger(input.shortMatchMinutes) || input.shortMatchMinutes <= 0) throw new Error('Duracion corta invalida')
   if (!Number.isInteger(input.longMatchMinutes) || input.longMatchMinutes <= 0) throw new Error('Duracion larga invalida')
   if (!Number.isInteger(input.restMinutes) || input.restMinutes < 0) throw new Error('Descanso invalido')
+  const courtCount = input.courtCount ?? tournamentDefaults.courtCount
+  if (!Number.isInteger(courtCount) || courtCount < 1 || courtCount > 6) {
+    throw new Error('El torneo debe tener entre 1 y 6 canchas habilitadas')
+  }
 
   const formatConfig = parseFormatConfig(input.formatConfig ?? defaultFormatConfig())
   const settings: GlobalSettings = {
@@ -40,6 +49,7 @@ export async function saveGlobalSettings(input: SaveGlobalSettingsInput): Promis
     shortMatchMinutes: input.shortMatchMinutes,
     longMatchMinutes: input.longMatchMinutes,
     restMinutes: input.restMinutes,
+    courtCount,
     formatConfig,
   }
 

@@ -16,7 +16,7 @@ export function OrganizerAdmin({
   settings,
 }: {
   organizers: { id: string; username: string; state: string }[]
-  settings: { endsAt: string; shortMatchMinutes: number; longMatchMinutes: number; restMinutes: number }
+  settings: { endsAt: string; shortMatchMinutes: number; longMatchMinutes: number; restMinutes: number; courtCount: number }
 }) {
   const [createState, createAction, createPending] = useActionState(createOrganizerAction, initialState)
   const [resetState, resetAction, resetPending] = useActionState(resetPasswordAction, initialState)
@@ -103,6 +103,10 @@ export function OrganizerAdmin({
         <label>
           Descanso minimo (minutos)
           <input name="restMinutes" type="number" min="0" defaultValue={settings.restMinutes} required />
+        </label>
+        <label>
+          Canchas habilitadas
+          <input name="courtCount" type="number" min="1" max="6" defaultValue={settings.courtCount} required />
         </label>
         <button type="submit" disabled={settingsPending}>
           {settingsPending ? 'Guardando...' : 'Guardar ajustes'}

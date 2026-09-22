@@ -12,7 +12,7 @@ export const tournamentDefaults = {
   shortMatchMinutes: 40,
   longMatchMinutes: 90,
   restMinutes: 20,
-  enabledCourtCount: 3,
+  courtCount: 3,
   formatConfig: DEFAULT_FORMAT_CONFIG,
 } as const
 
@@ -26,7 +26,7 @@ export interface CreateTournamentInput {
   longMatchMinutes?: number
   restMinutes?: number
   organizerId: string
-  enabledCourtCount?: 2 | 3
+  courtCount?: number
   formatConfig?: FormatConfig
 }
 
@@ -41,7 +41,7 @@ export interface UpdateTournamentInput {
   shortMatchMinutes?: number
   longMatchMinutes?: number
   restMinutes?: number
-  enabledCourtCount?: 2 | 3
+  courtCount?: number
   formatConfig?: FormatConfig
 }
 
@@ -50,13 +50,13 @@ export type TournamentTransaction = Parameters<Parameters<typeof db.transaction>
 export type ActiveOrganizer = Pick<typeof users.$inferSelect, 'id' | 'username'>
 type ResolvedTournamentInput = Omit<
   CreateTournamentInput,
-  'endsAt' | 'shortMatchMinutes' | 'longMatchMinutes' | 'restMinutes' | 'enabledCourtCount' | 'formatConfig'
+  'endsAt' | 'shortMatchMinutes' | 'longMatchMinutes' | 'restMinutes' | 'courtCount' | 'formatConfig'
 > & {
   endsAt: string
   shortMatchMinutes: number
   longMatchMinutes: number
   restMinutes: number
-  enabledCourtCount: 2 | 3
+  courtCount: number
   formatConfig: FormatConfig
 }
 
@@ -69,7 +69,7 @@ async function resolveWithGlobalSettings(input: CreateTournamentInput): Promise<
     shortMatchMinutes: input.shortMatchMinutes ?? defaults.shortMatchMinutes,
     longMatchMinutes: input.longMatchMinutes ?? defaults.longMatchMinutes,
     restMinutes: input.restMinutes ?? defaults.restMinutes,
-    enabledCourtCount: input.enabledCourtCount ?? tournamentDefaults.enabledCourtCount,
+    courtCount: input.courtCount ?? defaults.courtCount,
     formatConfig: parseFormatConfig(input.formatConfig ?? defaults.formatConfig),
   }
 }
@@ -104,8 +104,11 @@ function assertTournamentInput(input: CreateTournamentInput): void {
   if (input.restMinutes !== undefined && (!Number.isInteger(input.restMinutes) || input.restMinutes < 0)) {
     throw new Error('El descanso no puede ser negativo')
   }
-  if (input.enabledCourtCount !== undefined && ![2, 3].includes(input.enabledCourtCount)) {
-    throw new Error('El torneo debe tener dos o tres canchas habilitadas')
+  if (
+    input.courtCount !== undefined &&
+    (!Number.isInteger(input.courtCount) || input.courtCount < 1 || input.courtCount > 6)
+  ) {
+    throw new Error('El torneo debe tener entre 1 y 6 canchas habilitadas')
   }
   if (input.formatConfig !== undefined) parseFormatConfig(input.formatConfig)
 }
@@ -127,7 +130,7 @@ function assertUpdateInput(input: UpdateTournamentInput): void {
     longMatchMinutes: input.longMatchMinutes,
     restMinutes: input.restMinutes,
     organizerId: 'organizer',
-    enabledCourtCount: input.enabledCourtCount,
+    courtCount: input.courtCount,
     formatConfig: input.formatConfig,
   })
 }
@@ -270,18 +273,16 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
 
     const tournamentCourts = await tx
       .insert(courts)
-      .values([
-        { id: randomUUID(), tournamentId: tournament.id, name: 'Cancha 1', position: 1, covered: true, enabled: true },
-        { id: randomUUID(), tournamentId: tournament.id, name: 'Cancha 2', position: 2, covered: true, enabled: true },
-        {
+      .values(
+        Array.from({ length: resolved.courtCount }, (_, index) => ({
           id: randomUUID(),
           tournamentId: tournament.id,
-          name: 'Cancha 3',
-          position: 3,
-          covered: false,
-          enabled: resolved.enabledCourtCount === 3,
-        },
-      ])
+          name: `Cancha ${index + 1}`,
+          position: index + 1,
+          covered: index < 2,
+          enabled: true,
+        })),
+      )
       .returning()
 
     await tx.insert(categories).values(
@@ -313,7 +314,7 @@ export async function updateTournament(input: UpdateTournamentInput): Promise<To
       longMatchMinutes: input.longMatchMinutes ?? current.longMatchMinutes,
       restMinutes: input.restMinutes ?? current.restMinutes,
       organizerId: current.organizerId,
-      enabledCourtCount: input.enabledCourtCount,
+      courtCount: input.courtCount,
     })
 
     const immutableFields = [
@@ -350,12 +351,28 @@ export async function updateTournament(input: UpdateTournamentInput): Promise<To
 
     if (!updated) throw new Error('Datos desactualizados')
 
-    if (input.enabledCourtCount !== undefined) {
+    if (input.courtCount !== undefined) {
+      const existingCourts = await tx.select().from(courts).where(eq(courts.tournamentId, input.id))
+      const missing = Array.from({ length: input.courtCount }, (_, index) => index + 1).filter(
+        (position) => !existingCourts.some((court) => court.position === position),
+      )
+      if (missing.length > 0) {
+        await tx.insert(courts).values(
+          missing.map((position) => ({
+            id: randomUUID(),
+            tournamentId: input.id,
+            name: `Cancha ${position}`,
+            position,
+            covered: position <= 2,
+            enabled: true,
+          })),
+        )
+      }
       await tx.update(courts).set({ enabled: false }).where(eq(courts.tournamentId, input.id))
       await tx
         .update(courts)
         .set({ enabled: true })
-        .where(and(eq(courts.tournamentId, input.id), lte(courts.position, input.enabledCourtCount)))
+        .where(and(eq(courts.tournamentId, input.id), lte(courts.position, input.courtCount)))
       if (updated.state === 'in_progress') {
         await replanPendingMatches(input.id, new Date(), tx)
       }

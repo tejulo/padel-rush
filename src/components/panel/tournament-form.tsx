@@ -11,6 +11,7 @@ export interface TournamentDefaultValues {
   shortMatchMinutes: number
   longMatchMinutes: number
   restMinutes: number
+  courtCount: number
 }
 
 export function TournamentForm({
@@ -26,7 +27,6 @@ export function TournamentForm({
 }) {
   const action = tournament ? updateTournamentAction : createTournamentAction
   const [state, formAction, pending] = useActionState(action, initialState)
-  const enabledCourtCount = tournament?.courts.filter((court) => court.enabled).length === 2 ? 2 : 3
   const locked = tournament?.state !== undefined && tournament.state !== 'draft'
 
   return (
@@ -103,17 +103,17 @@ export function TournamentForm({
           disabled={locked}
         />
       </label>
-      <fieldset>
-        <legend>Canchas habilitadas</legend>
-        <label>
-          <input type="radio" name="enabledCourtCount" value="2" defaultChecked={enabledCourtCount === 2} />
-          Dos cubiertas
-        </label>
-        <label>
-          <input type="radio" name="enabledCourtCount" value="3" defaultChecked={enabledCourtCount === 3} />
-          Tres canchas
-        </label>
-      </fieldset>
+      <label>
+        Canchas habilitadas
+        <input
+          name="courtCount"
+          type="number"
+          min="1"
+          max="6"
+          required
+          defaultValue={tournament?.courts.filter((court) => court.enabled).length ?? defaults?.courtCount ?? 3}
+        />
+      </label>
       {state.error ? <p role="alert">{state.error}</p> : null}
       {state.success ? <p role="status">{state.success}</p> : null}
       <button type="submit" disabled={pending}>

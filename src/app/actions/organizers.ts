@@ -64,6 +64,7 @@ export async function saveSettingsAction(_previousState: ActionState, formData: 
       shortMatchMinutes: Number(value(formData, 'shortMatchMinutes')),
       longMatchMinutes: Number(value(formData, 'longMatchMinutes')),
       restMinutes: Number(value(formData, 'restMinutes')),
+      courtCount: Number(value(formData, 'courtCount')),
     })
   } catch (error) {
     return errorState(error)

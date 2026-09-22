@@ -79,7 +79,7 @@ describe('tournament management', () => {
           shortMatchMinutes: undefined,
           longMatchMinutes: undefined,
           restMinutes: undefined,
-          enabledCourtCount: undefined,
+          courtCount: undefined,
         }),
       ),
     ).rejects.toThrow('La hora limite debe ser posterior al inicio')
@@ -116,9 +116,9 @@ describe('tournament management', () => {
   })
 
   it('updates the enabled court set without changing court identities', async () => {
-    const tournament = await createTournament(makeTournamentInput({ enabledCourtCount: 3 }))
+    const tournament = await createTournament(makeTournamentInput({ courtCount: 3 }))
     const courtIds = tournament.courts.map((court) => court.id)
-    const twoCourts = await updateTournament({ id: tournament.id, version: tournament.version, enabledCourtCount: 2 })
+    const twoCourts = await updateTournament({ id: tournament.id, version: tournament.version, courtCount: 2 })
 
     expect(twoCourts.courts.map((court) => court.enabled)).toEqual([true, true, false])
     expect(twoCourts.courts.map((court) => court.id)).toEqual(courtIds)
@@ -126,9 +126,34 @@ describe('tournament management', () => {
     const threeCourts = await updateTournament({
       id: tournament.id,
       version: twoCourts.version,
-      enabledCourtCount: 3,
+      courtCount: 3,
     })
     expect(threeCourts.courts.map((court) => court.enabled)).toEqual([true, true, true])
+  })
+
+  it('creates one to six courts and adds missing ones when the count grows', async () => {
+    const one = await createTournament(makeTournamentInput({ name: 'Una cancha', courtCount: 1 }))
+    expect(one.courts.filter((court) => court.enabled)).toHaveLength(1)
+
+    const six = await createTournament(makeTournamentInput({ name: 'Seis canchas', courtCount: 6 }))
+    expect(six.courts).toHaveLength(6)
+    expect(six.courts.filter((court) => court.enabled)).toHaveLength(6)
+
+    const grown = await updateTournament({ id: one.id, version: one.version, courtCount: 4 })
+    expect(grown.courts).toHaveLength(4)
+    expect(grown.courts.filter((court) => court.enabled)).toHaveLength(4)
+
+    const shrunk = await updateTournament({ id: grown.id, version: grown.version, courtCount: 2 })
+    expect(shrunk.courts.filter((court) => court.enabled)).toHaveLength(2)
+  })
+
+  it('rejects court counts outside one to six', async () => {
+    await expect(createTournament(makeTournamentInput({ courtCount: 0 }))).rejects.toThrow(
+      'El torneo debe tener entre 1 y 6 canchas habilitadas',
+    )
+    await expect(createTournament(makeTournamentInput({ courtCount: 7 }))).rejects.toThrow(
+      'El torneo debe tener entre 1 y 6 canchas habilitadas',
+    )
   })
 
   it('lets an admin assign a new tournament to a selected active organizer', async () => {
@@ -146,7 +171,7 @@ describe('tournament management', () => {
     formData.set('shortMatchMinutes', '40')
     formData.set('longMatchMinutes', '90')
     formData.set('restMinutes', '20')
-    formData.set('enabledCourtCount', '2')
+    formData.set('courtCount', '2')
     formData.set('organizerId', 'other-organizer-id')
 
     await createTournamentAction({}, formData)
@@ -178,7 +203,7 @@ describe('tournament management', () => {
     formData.set('shortMatchMinutes', '40')
     formData.set('longMatchMinutes', '90')
     formData.set('restMinutes', '20')
-    formData.set('enabledCourtCount', '2')
+    formData.set('courtCount', '2')
     formData.set('organizerId', 'other-organizer-id')
 
     await createTournamentAction({}, formData)

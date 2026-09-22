@@ -234,7 +234,7 @@ describe('scheduling service', () => {
     expect(before).toHaveLength(1)
 
     const [current] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId))
-    await updateTournament({ id: tournamentId, version: current!.version, enabledCourtCount: 2 })
+    await updateTournament({ id: tournamentId, version: current!.version, courtCount: 2 })
 
     const openMatches = (await db.select().from(matches)).filter((match) =>
       ['pending', 'scheduled'].includes(match.state),

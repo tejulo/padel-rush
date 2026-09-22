@@ -70,7 +70,7 @@ export async function seedDemo(): Promise<void> {
     longMatchMinutes: 90,
     restMinutes: 20,
     organizerId: organizer.id,
-    enabledCourtCount: 3,
+    courtCount: 3,
   })
   const categoryRows = await db
     .select()

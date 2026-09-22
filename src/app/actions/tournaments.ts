@@ -26,8 +26,9 @@ function numberValue(formData: FormData, name: string): number | undefined {
   return raw ? Number(raw) : undefined
 }
 
-function courtCount(formData: FormData): 2 | 3 {
-  return value(formData, 'enabledCourtCount') === '2' ? 2 : 3
+function courtCountValue(formData: FormData): number | undefined {
+  const raw = value(formData, 'courtCount')
+  return raw ? Number(raw) : undefined
 }
 
 function optionalValue(formData: FormData, name: string): string | undefined {
@@ -49,7 +50,7 @@ function tournamentInput(formData: FormData, organizerId: string): CreateTournam
     longMatchMinutes: numberValue(formData, 'longMatchMinutes'),
     restMinutes: numberValue(formData, 'restMinutes'),
     organizerId,
-    enabledCourtCount: formData.has('enabledCourtCount') ? courtCount(formData) : undefined,
+    courtCount: courtCountValue(formData),
   }
 }
 
@@ -83,7 +84,7 @@ function updateInput(formData: FormData): UpdateTournamentInput {
     shortMatchMinutes: formData.has('shortMatchMinutes') ? numberValue(formData, 'shortMatchMinutes') : undefined,
     longMatchMinutes: formData.has('longMatchMinutes') ? numberValue(formData, 'longMatchMinutes') : undefined,
     restMinutes: formData.has('restMinutes') ? numberValue(formData, 'restMinutes') : undefined,
-    enabledCourtCount: formData.has('enabledCourtCount') ? courtCount(formData) : undefined,
+    courtCount: courtCountValue(formData),
   }
 }
 
