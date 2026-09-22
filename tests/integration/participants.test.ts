@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import { categories, participants, registrations, teamMembers, teams, tournaments, users } from '@/lib/db/schema'
 import { resetDatabase } from '@/lib/test/database'
@@ -136,6 +136,41 @@ describe('participant registrations', () => {
     })
 
     await expect(deleteParticipant(participant.id, participant.version + 1)).rejects.toThrow('Datos desactualizados')
+  })
+
+  it('allows participant changes while another category is cancelled', async () => {
+    await db
+      .update(categories)
+      .set({ state: 'cancelled' })
+      .where(and(eq(categories.tournamentId, tournamentId), inArray(categories.category, ['women', 'mixed'])))
+
+    const participant = await createParticipant({
+      tournamentId,
+      name: 'Juan',
+      gender: 'man',
+      level: 4,
+      categories: ['men'],
+    })
+
+    await expect(deleteParticipant(participant.id, participant.version)).resolves.toBeUndefined()
+    expect(await db.select().from(participants).where(eq(participants.id, participant.id))).toEqual([])
+  })
+
+  it('rejects registering into a cancelled category', async () => {
+    await db
+      .update(categories)
+      .set({ state: 'cancelled' })
+      .where(and(eq(categories.tournamentId, tournamentId), eq(categories.category, 'women')))
+
+    await expect(
+      createParticipant({
+        tournamentId,
+        name: 'Ana',
+        gender: 'woman',
+        level: 4,
+        categories: ['women'],
+      }),
+    ).rejects.toThrow('La categoria fue cancelada')
   })
 
   it('waits for an in-flight tournament lock before checking category state', async () => {

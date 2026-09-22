@@ -38,7 +38,7 @@ function assertValidParticipant(input: Omit<CreateParticipantInput, 'tournamentI
 async function getEditableTournament(tx: TournamentTransaction, tournamentId: string) {
   const { tournament, tournamentCategories } = await lockTournamentForWrite(tx, tournamentId)
   if (tournament.state !== 'draft') throw new Error('El torneo no admite cambios')
-  if (tournamentCategories.some((category) => category.state !== 'draft')) {
+  if (tournamentCategories.some((category) => category.state !== 'draft' && category.state !== 'cancelled')) {
     throw new Error('El torneo no admite cambios')
   }
 
@@ -49,9 +49,10 @@ function categoryIds(
   requested: Category[],
   available: typeof categories.$inferSelect[],
 ): string[] {
-  const ids = requested.map((category) => available.find((row) => row.category === category)?.id)
-  if (ids.some((id) => !id)) throw new Error('Categoria no encontrada')
-  return ids as string[]
+  const rows = requested.map((category) => available.find((row) => row.category === category))
+  if (rows.some((row) => !row)) throw new Error('Categoria no encontrada')
+  if (rows.some((row) => row!.state === 'cancelled')) throw new Error('La categoria fue cancelada')
+  return rows.map((row) => row!.id)
 }
 
 async function writeRegistrations(
