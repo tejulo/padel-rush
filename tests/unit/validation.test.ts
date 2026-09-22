@@ -11,6 +11,13 @@ it('rejects an incompatible category', () => {
   expect(validateParticipant({ name: 'Ana', gender: 'woman', level: 3, categories: ['men'] }).ok).toBe(false)
 })
 
+it('rejects a participant without categories', () => {
+  expect(validateParticipant({ name: 'Ana', gender: 'woman', level: 3, categories: [] })).toEqual({
+    ok: false,
+    message: 'El participante debe tener al menos una categoria',
+  })
+})
+
 it('rejects a non-integer level outside the allowed range', () => {
   expect(validateParticipant({ name: 'Ana', gender: 'woman', level: 5.5, categories: ['women'] })).toEqual({
     ok: false,

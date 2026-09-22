@@ -142,6 +142,16 @@ export async function updateParticipant(input: UpdateParticipantInput): Promise<
   })
 }
 
+export async function deleteParticipant(participantId: string, version: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [participant] = await tx.select().from(participants).where(eq(participants.id, participantId)).limit(1)
+    if (!participant) throw new Error('Participante no encontrado')
+    await getEditableTournament(tx, participant.tournamentId)
+    if (!Number.isInteger(version) || version !== participant.version) throw new Error('Datos desactualizados')
+    await tx.delete(participants).where(and(eq(participants.id, participantId), eq(participants.version, version)))
+  })
+}
+
 export async function getParticipants(tournamentId: string): Promise<ParticipantWithCategories[]> {
   const participantRows = await db
     .select()

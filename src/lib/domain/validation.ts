@@ -15,6 +15,10 @@ export function validateParticipant(input: ParticipantValidationInput): Validati
     return { ok: false, message: 'El nivel debe ser un entero entre 1 y 5' }
   }
 
+  if (input.categories.length === 0) {
+    return { ok: false, message: 'El participante debe tener al menos una categoria' }
+  }
+
   if (new Set(input.categories).size !== input.categories.length) {
     return { ok: false, message: 'No se puede repetir una categoria' }
   }

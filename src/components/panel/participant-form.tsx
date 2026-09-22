@@ -1,8 +1,13 @@
 'use client'
 
-import { useActionState } from 'react'
-import { createParticipantAction, updateParticipantAction, type ActionState } from '@/app/actions/participants'
-import type { Category } from '@/lib/domain/types'
+import { useActionState, useState } from 'react'
+import {
+  createParticipantAction,
+  deleteParticipantAction,
+  updateParticipantAction,
+  type ActionState,
+} from '@/app/actions/participants'
+import type { Category, Gender } from '@/lib/domain/types'
 import type { ParticipantWithCategories } from '@/lib/services/participants'
 
 const categoryLabels: Record<Category, string> = {
@@ -12,6 +17,10 @@ const categoryLabels: Record<Category, string> = {
 }
 const categories: Category[] = ['men', 'women', 'mixed']
 const initialState: ActionState = {}
+
+function naturalCategory(gender: Gender): Category {
+  return gender === 'man' ? 'men' : 'women'
+}
 
 export function ParticipantForm({
   tournamentId,
@@ -24,6 +33,25 @@ export function ParticipantForm({
 }) {
   const action = participant ? updateParticipantAction : createParticipantAction
   const [state, formAction, pending] = useActionState(action, initialState)
+  const [deleteState, deleteAction, deletePending] = useActionState(deleteParticipantAction, initialState)
+  const initialGender = participant?.gender ?? 'man'
+  const [gender, setGender] = useState<Gender>(initialGender)
+  const [selected, setSelected] = useState<Category[]>(
+    participant ? participant.categories : [naturalCategory(initialGender)],
+  )
+  const [touched, setTouched] = useState(Boolean(participant))
+
+  function changeGender(next: Gender) {
+    setGender(next)
+    if (!touched) setSelected([naturalCategory(next)])
+  }
+
+  function toggleCategory(category: Category) {
+    setTouched(true)
+    setSelected((current) =>
+      current.includes(category) ? current.filter((item) => item !== category) : [...current, category],
+    )
+  }
 
   if (!draft && participant) {
     return (
@@ -39,7 +67,7 @@ export function ParticipantForm({
     )
   }
 
-  return (
+  const form = (
     <form action={formAction} className="card">
       {participant ? null : <h3 className="card-title">Nuevo participante</h3>}
       <div className="card-body">
@@ -52,7 +80,7 @@ export function ParticipantForm({
         <div className="field-row">
           <label>
             Genero
-            <select name="gender" defaultValue={participant?.gender ?? 'man'}>
+            <select name="gender" value={gender} onChange={(event) => changeGender(event.target.value as Gender)}>
               <option value="man">Hombre</option>
               <option value="woman">Mujer</option>
             </select>
@@ -70,7 +98,8 @@ export function ParticipantForm({
                 type="checkbox"
                 name="categories"
                 value={category}
-                defaultChecked={participant?.categories.includes(category)}
+                checked={selected.includes(category)}
+                onChange={() => toggleCategory(category)}
                 disabled={!draft}
               />
               {categoryLabels[category]}
@@ -84,5 +113,21 @@ export function ParticipantForm({
         </button>
       </div>
     </form>
+  )
+
+  if (!participant) return form
+
+  return (
+    <article className="stack">
+      {form}
+      <form action={deleteAction}>
+        <input type="hidden" name="id" value={participant.id} />
+        <input type="hidden" name="version" value={participant.version} />
+        {deleteState.error ? <p role="alert">{deleteState.error}</p> : null}
+        <button type="submit" className="caution" disabled={deletePending}>
+          {deletePending ? 'Eliminando...' : 'Eliminar participante'}
+        </button>
+      </form>
+    </article>
   )
 }

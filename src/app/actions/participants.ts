@@ -6,6 +6,7 @@ import type { Category, Gender } from '@/lib/domain/types'
 import { assertTournamentOwner, getTournament } from '@/lib/services/tournaments'
 import {
   createParticipant,
+  deleteParticipant,
   getParticipant,
   updateParticipant,
   replaceRegistrations,
@@ -104,6 +105,27 @@ export async function updateParticipantAction(_previousState: ActionState, formD
 
   revalidatePath(`/tournaments/${participant.tournamentId}/participants`)
   return { success: 'Participante actualizado' }
+}
+
+export async function deleteParticipantAction(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireUser()
+  const participantId = value(formData, 'id')
+  const participant = await getParticipant(participantId)
+  if (!participant) return { error: 'Participante no encontrado' }
+
+  try {
+    await assertAccess(user, participant.tournamentId)
+    await deleteParticipant(participantId, numberValue(formData, 'version'))
+  } catch (error) {
+    return errorState(error)
+  }
+
+  revalidatePath(`/tournaments/${participant.tournamentId}/participants`)
+  revalidatePath(`/tournaments/${participant.tournamentId}/teams`)
+  return { success: 'Participante eliminado' }
 }
 
 export async function replaceRegistrationsAction(
