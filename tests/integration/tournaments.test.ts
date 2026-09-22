@@ -6,6 +6,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
 
 import { db } from '@/lib/db/client'
+import { defaultFormatConfig } from '@/lib/domain/format'
 import { resetDatabase } from '@/lib/test/database'
 import { makeTournamentInput } from '@/lib/test/factories'
 import { categories, matches, participants, registrations, teamMembers, teams, tournaments, users } from '@/lib/db/schema'
@@ -13,6 +14,7 @@ import { requireRole, requireUser } from '@/lib/auth/guards'
 import { cancelTournamentAction, createTournamentAction, deleteTournamentAction } from '@/app/actions/tournaments'
 import { createBrackets } from '@/lib/services/brackets'
 import { recordResult } from '@/lib/services/matches'
+import { getGlobalSettings, saveGlobalSettings } from '@/lib/services/settings'
 import {
   assertTournamentOwner,
   cancelTournament,
@@ -194,6 +196,62 @@ describe('tournament management', () => {
     await expect(
       updateTournament({ id: tournament.id, version: tournament.version, timezone: 'Mars/Olympus' }),
     ).rejects.toThrow('La zona horaria no es valida')
+  })
+
+  it('copies the default format config and persists a custom one', async () => {
+    const defaults = await createTournament(makeTournamentInput())
+    expect(defaults.formatConfig).toEqual(defaultFormatConfig())
+
+    const custom = await createTournament(
+      makeTournamentInput({
+        name: 'Formato custom',
+        formatConfig: {
+          regular: { games: 6, sets: 1, tieBreak: false, advantage: false },
+          finals: { games: 6, sets: 3, tieBreak: true, advantage: true },
+        },
+      }),
+    )
+    expect(custom.formatConfig.regular).toEqual({ games: 6, sets: 1, tieBreak: false, advantage: false })
+
+    const updated = await updateTournament({
+      id: custom.id,
+      version: custom.version,
+      formatConfig: {
+        regular: { games: 8, sets: 1, tieBreak: true, advantage: false },
+        finals: custom.formatConfig.finals,
+      },
+    })
+    expect(updated.formatConfig.regular.games).toBe(8)
+  })
+
+  it('rejects format changes after the tournament starts', async () => {
+    const tournament = await createTournament(makeTournamentInput())
+    await db.update(tournaments).set({ state: 'in_progress' }).where(eq(tournaments.id, tournament.id))
+    await expect(
+      updateTournament({
+        id: tournament.id,
+        version: tournament.version,
+        formatConfig: {
+          regular: { games: 6, sets: 1, tieBreak: true, advantage: false },
+          finals: tournament.formatConfig.finals,
+        },
+      }),
+    ).rejects.toThrow('El torneo ya iniciado no permite cambiar su configuracion')
+  })
+
+  it('persists global format defaults and fills missing values', async () => {
+    await saveGlobalSettings({
+      endsAt: '22:00',
+      shortMatchMinutes: 35,
+      longMatchMinutes: 80,
+      restMinutes: 15,
+      formatConfig: {
+        regular: { games: 6, sets: 1, tieBreak: false, advantage: false },
+        finals: { games: 6, sets: 3, tieBreak: true, advantage: true },
+      },
+    })
+    const settings = await getGlobalSettings()
+    expect(settings.formatConfig.regular).toEqual({ games: 6, sets: 1, tieBreak: false, advantage: false })
   })
 
   it('cancels an in-progress tournament keeping results and leaving the champion undecided', async () => {

@@ -1,0 +1,1 @@
+ALTER TABLE "tournaments" ADD COLUMN "format_config" jsonb DEFAULT '{"regular":{"games":9,"sets":1,"tieBreak":true,"advantage":false},"finals":{"games":6,"sets":3,"tieBreak":true,"advantage":true}}'::jsonb NOT NULL;

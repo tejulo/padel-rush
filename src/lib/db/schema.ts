@@ -1,4 +1,5 @@
 import { relations, sql } from 'drizzle-orm'
+import { DEFAULT_FORMAT_CONFIG, type FormatConfig } from '@/lib/domain/format'
 import {
   boolean,
   check,
@@ -104,6 +105,7 @@ export const tournaments = pgTable(
     shortMatchMinutes: integer('short_match_minutes').notNull(),
     longMatchMinutes: integer('long_match_minutes').notNull(),
     restMinutes: integer('rest_minutes').notNull(),
+    formatConfig: jsonb('format_config').notNull().$type<FormatConfig>().default(DEFAULT_FORMAT_CONFIG),
     state: tournamentStateEnum('state').notNull().default('draft'),
     publicToken: text('public_token'),
     organizerId: text('organizer_id')

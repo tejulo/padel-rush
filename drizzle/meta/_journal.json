@@ -43,6 +43,13 @@
       "when": 1789428263590,
       "tag": "0005_app_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790048028062,
+      "tag": "0006_amused_moonstone",
+      "breakpoints": true
     }
   ]
 }

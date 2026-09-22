@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/auth/guards'
 import type { SessionUser } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { categories, courts, tournaments, users, type Court, type Tournament } from '@/lib/db/schema'
+import { DEFAULT_FORMAT_CONFIG, parseFormatConfig, type FormatConfig } from '@/lib/domain/format'
 import { replanPendingMatches } from '@/lib/services/scheduling'
 
 export const tournamentDefaults = {
@@ -12,6 +13,7 @@ export const tournamentDefaults = {
   longMatchMinutes: 90,
   restMinutes: 20,
   enabledCourtCount: 3,
+  formatConfig: DEFAULT_FORMAT_CONFIG,
 } as const
 
 export interface CreateTournamentInput {
@@ -25,6 +27,7 @@ export interface CreateTournamentInput {
   restMinutes?: number
   organizerId: string
   enabledCourtCount?: 2 | 3
+  formatConfig?: FormatConfig
 }
 
 export interface UpdateTournamentInput {
@@ -39,6 +42,7 @@ export interface UpdateTournamentInput {
   longMatchMinutes?: number
   restMinutes?: number
   enabledCourtCount?: 2 | 3
+  formatConfig?: FormatConfig
 }
 
 export type TournamentWithCourts = Tournament & { courts: Court[] }
@@ -46,13 +50,14 @@ export type TournamentTransaction = Parameters<Parameters<typeof db.transaction>
 export type ActiveOrganizer = Pick<typeof users.$inferSelect, 'id' | 'username'>
 type ResolvedTournamentInput = Omit<
   CreateTournamentInput,
-  'endsAt' | 'shortMatchMinutes' | 'longMatchMinutes' | 'restMinutes' | 'enabledCourtCount'
+  'endsAt' | 'shortMatchMinutes' | 'longMatchMinutes' | 'restMinutes' | 'enabledCourtCount' | 'formatConfig'
 > & {
   endsAt: string
   shortMatchMinutes: number
   longMatchMinutes: number
   restMinutes: number
   enabledCourtCount: 2 | 3
+  formatConfig: FormatConfig
 }
 
 async function resolveWithGlobalSettings(input: CreateTournamentInput): Promise<ResolvedTournamentInput> {
@@ -65,6 +70,7 @@ async function resolveWithGlobalSettings(input: CreateTournamentInput): Promise<
     longMatchMinutes: input.longMatchMinutes ?? defaults.longMatchMinutes,
     restMinutes: input.restMinutes ?? defaults.restMinutes,
     enabledCourtCount: input.enabledCourtCount ?? tournamentDefaults.enabledCourtCount,
+    formatConfig: parseFormatConfig(input.formatConfig ?? defaults.formatConfig),
   }
 }
 
@@ -101,6 +107,7 @@ function assertTournamentInput(input: CreateTournamentInput): void {
   if (input.enabledCourtCount !== undefined && ![2, 3].includes(input.enabledCourtCount)) {
     throw new Error('El torneo debe tener dos o tres canchas habilitadas')
   }
+  if (input.formatConfig !== undefined) parseFormatConfig(input.formatConfig)
 }
 
 function assertUpdateInput(input: UpdateTournamentInput): void {
@@ -121,6 +128,7 @@ function assertUpdateInput(input: UpdateTournamentInput): void {
     restMinutes: input.restMinutes,
     organizerId: 'organizer',
     enabledCourtCount: input.enabledCourtCount,
+    formatConfig: input.formatConfig,
   })
 }
 
@@ -256,6 +264,7 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
         longMatchMinutes: resolved.longMatchMinutes,
         restMinutes: resolved.restMinutes,
         organizerId: resolved.organizerId,
+        formatConfig: resolved.formatConfig,
       })
       .returning()
 
@@ -315,6 +324,7 @@ export async function updateTournament(input: UpdateTournamentInput): Promise<To
       'shortMatchMinutes',
       'longMatchMinutes',
       'restMinutes',
+      'formatConfig',
     ] as const
     if (current.state !== 'draft' && immutableFields.some((field) => input[field] !== undefined)) {
       throw new Error('El torneo ya iniciado no permite cambiar su configuracion')
@@ -331,6 +341,7 @@ export async function updateTournament(input: UpdateTournamentInput): Promise<To
         ...(input.shortMatchMinutes === undefined ? {} : { shortMatchMinutes: input.shortMatchMinutes }),
         ...(input.longMatchMinutes === undefined ? {} : { longMatchMinutes: input.longMatchMinutes }),
         ...(input.restMinutes === undefined ? {} : { restMinutes: input.restMinutes }),
+        ...(input.formatConfig === undefined ? {} : { formatConfig: parseFormatConfig(input.formatConfig) }),
         version: current.version + 1,
         updatedAt: new Date(),
       })
