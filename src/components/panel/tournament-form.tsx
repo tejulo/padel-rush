@@ -2,7 +2,14 @@
 
 import { useActionState, useState } from 'react'
 import type { ActiveOrganizer, TournamentWithCourts } from '@/lib/services/tournaments'
-import { DEFAULT_FORMAT_CONFIG, formatExample, type FormatConfig, type ProfileFormat } from '@/lib/domain/format'
+import {
+  DEFAULT_FORMAT_CONFIG,
+  formatExample,
+  MAX_GAMES,
+  MIN_GAMES,
+  type FormatConfig,
+  type ProfileFormat,
+} from '@/lib/domain/format'
 import { createTournamentAction, updateTournamentAction, type ActionState } from '@/app/actions/tournaments'
 
 const initialState: ActionState = {}
@@ -153,6 +160,7 @@ export function ProfileFields({
   format: ProfileFormat
   locked: boolean
 }) {
+  const [gamesInput, setGamesInput] = useState(String(format.games))
   const [games, setGames] = useState(format.games)
   const [sets, setSets] = useState(format.sets)
   const [tieBreak, setTieBreak] = useState(format.tieBreak)
@@ -168,12 +176,16 @@ export function ProfileFields({
           <input
             name={`${profile}Games`}
             type="number"
-            min="4"
-            max="9"
+            min={MIN_GAMES}
+            max={MAX_GAMES}
             required
-            value={games}
+            value={gamesInput}
             disabled={locked}
-            onChange={(event) => setGames(Number(event.target.value))}
+            onChange={(event) => {
+              setGamesInput(event.target.value)
+              const parsed = Number(event.target.value)
+              if (Number.isInteger(parsed) && parsed >= MIN_GAMES && parsed <= MAX_GAMES) setGames(parsed)
+            }}
           />
         </label>
         <label>

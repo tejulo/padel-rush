@@ -72,3 +72,7 @@ export function formatExample(format: ProfileFormat): string {
   if (!format.tieBreak || !format.advantage) return `${normal} o ${format.games}-${format.games - 1}`
   return `${normal}, ${format.games + 1}-${format.games - 1} o ${format.games + 1}-${format.games}`
 }
+
+export function matchDurationMinutes(format: ProfileFormat, shortMinutes: number, longMinutes: number): number {
+  return format.sets > 1 ? longMinutes : shortMinutes
+}

@@ -1,8 +1,9 @@
-import type { MatchProfile } from '@/lib/domain/format'
+import type { ProfileFormat } from '@/lib/domain/format'
+import { matchDurationMinutes } from '@/lib/domain/format'
 
 export interface SchedulingMatch {
   id: string
-  profile: MatchProfile
+  format: ProfileFormat
   participantIds: readonly string[]
   readyAt: Date
   dependentCount?: number
@@ -29,6 +30,7 @@ export interface ParticipantReservation extends SchedulingInterval {
 export interface ConditionalReset {
   id: string
   afterMatchId: string
+  format: ProfileFormat
   fixedInterval?: SchedulingInterval
 }
 
@@ -168,8 +170,7 @@ export function scheduleReadyMatches(input: SchedulingInput): ScheduledMatch[] {
   const endLimit = input.tournamentEndsAt.getTime()
 
   for (const match of sorted) {
-    const duration =
-      (match.profile === 'finals' ? input.longMatchMinutes : input.shortMatchMinutes) * MINUTE
+    const duration = matchDurationMinutes(match.format, input.shortMatchMinutes, input.longMatchMinutes) * MINUTE
     const earliest = Math.max(startFloor, match.readyAt.getTime())
     const slot = scheduleInterval(input, earliest, duration, match.participantIds, booked)
     if (!slot) throw new Error(`No se pudo programar el partido ${match.id}`)
@@ -185,9 +186,9 @@ export function scheduleReadyMatches(input: SchedulingInput): ScheduledMatch[] {
     })
   }
 
-  const duration = input.longMatchMinutes * MINUTE
   const rest = input.restMinutes * MINUTE
   for (const reset of input.conditionalResets ?? []) {
+    const duration = matchDurationMinutes(reset.format, input.shortMatchMinutes, input.longMatchMinutes) * MINUTE
     const grandFinal = scheduled.find((entry) => entry.matchId === reset.afterMatchId)
     const anchor = reset.fixedInterval
       ? { startsAt: reset.fixedInterval.startsAt, endsAt: reset.fixedInterval.endsAt }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MatchProfile } from '@/lib/domain/format'
+import type { ProfileFormat } from '@/lib/domain/format'
 import {
   scheduleReadyMatches,
   type ScheduledMatch,
@@ -10,14 +10,17 @@ import {
 const MINUTE = 60_000
 const at = (hour: number, minute = 0) => new Date(Date.UTC(2026, 8, 13, hour, minute))
 
+const regularFormat: ProfileFormat = { games: 9, sets: 1, tieBreak: true, advantage: false }
+const longFormat: ProfileFormat = { games: 6, sets: 3, tieBreak: true, advantage: true }
+
 function makeMatch(
   id: string,
   participantIds: string[],
   readyAt = at(9),
-  profile: MatchProfile = 'regular',
+  format: ProfileFormat = regularFormat,
   dependentCount = 0,
 ): SchedulingMatch {
-  return { id, participantIds, readyAt, profile, dependentCount }
+  return { id, participantIds, readyAt, format, dependentCount }
 }
 
 function input(overrides: Partial<SchedulingInput> = {}): SchedulingInput {
@@ -56,12 +59,20 @@ describe('scheduleReadyMatches', () => {
     expect(mixed.startsAt.getTime()).toBeGreaterThanOrEqual(men.endsAt.getTime() + 20 * MINUTE)
   })
 
-  it('uses the long duration for a winners final', () => {
+  it('uses the long duration when the format plays more than one set', () => {
     const schedule = scheduleReadyMatches(
-      input({ matches: [makeMatch('w-final', ['p1', 'p2', 'p3', 'p4'], at(9), 'finals')] }),
+      input({ matches: [makeMatch('w-final', ['p1', 'p2', 'p3', 'p4'], at(9), longFormat)] }),
     )
 
     expect(schedule[0].endsAt.getTime() - schedule[0].startsAt.getTime()).toBe(90 * MINUTE)
+  })
+
+  it('uses the short duration for a one-set format even in finals', () => {
+    const schedule = scheduleReadyMatches(
+      input({ matches: [makeMatch('w-final', ['p1', 'p2', 'p3', 'p4'], at(9), regularFormat)] }),
+    )
+
+    expect(schedule[0].endsAt.getTime() - schedule[0].startsAt.getTime()).toBe(40 * MINUTE)
   })
 
   it('respects existing court and participant reservations with rest', () => {
@@ -82,9 +93,9 @@ describe('scheduleReadyMatches', () => {
       input({
         courts: [{ id: 'c1', enabled: true }],
         matches: [
-          makeMatch('early', ['p1', 'p2', 'p3', 'p4'], at(9), 'regular', 0),
-          makeMatch('unlocks-most', ['p5', 'p6', 'p7', 'p8'], at(9), 'regular', 3),
-          makeMatch('unlocks-some', ['p9', 'p10', 'p11', 'p12'], at(9), 'regular', 1),
+          makeMatch('early', ['p1', 'p2', 'p3', 'p4'], at(9), regularFormat, 0),
+          makeMatch('unlocks-most', ['p5', 'p6', 'p7', 'p8'], at(9), regularFormat, 3),
+          makeMatch('unlocks-some', ['p9', 'p10', 'p11', 'p12'], at(9), regularFormat, 1),
         ],
       }),
     )
@@ -155,7 +166,7 @@ describe('scheduleReadyMatches', () => {
         tournamentEndsAt: at(10),
         matches: [
           makeMatch('short', ['p1', 'p2', 'p3', 'p4']),
-          makeMatch('long', ['p5', 'p6', 'p7', 'p8'], at(9, 30), 'finals'),
+          makeMatch('long', ['p5', 'p6', 'p7', 'p8'], at(9, 30), longFormat),
         ],
       }),
     )
@@ -169,8 +180,8 @@ describe('scheduleReadyMatches', () => {
     const schedule = scheduleReadyMatches(
       input({
         courts: [{ id: 'c1', enabled: true }],
-        matches: [makeMatch('gf', ['p1', 'p2', 'p3', 'p4'], at(9), 'finals')],
-        conditionalResets: [{ id: 'gf-reset', afterMatchId: 'gf' }],
+        matches: [makeMatch('gf', ['p1', 'p2', 'p3', 'p4'], at(9), longFormat)],
+        conditionalResets: [{ id: 'gf-reset', afterMatchId: 'gf', format: longFormat }],
       }),
     )
 
@@ -189,6 +200,7 @@ describe('scheduleReadyMatches', () => {
           {
             id: 'gf-reset',
             afterMatchId: 'gf',
+            format: longFormat,
             fixedInterval: { startsAt: at(9, 35), endsAt: at(11, 5) },
           },
         ],

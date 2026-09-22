@@ -4,6 +4,7 @@ import {
   defaultFormatConfig,
   formatExample,
   formatLabel,
+  matchDurationMinutes,
   parseFormatConfig,
   profileForStage,
 } from '@/lib/domain/format'
@@ -51,5 +52,13 @@ describe('format config', () => {
     expect(profileForStage('losers-final')).toBe('finals')
     expect(profileForStage('winners-round')).toBe('regular')
     expect(profileForStage('losers-round')).toBe('regular')
+  })
+
+  it('picks the long block only when the format plays more than one set', () => {
+    expect(matchDurationMinutes(DEFAULT_FORMAT_CONFIG.regular, 40, 90)).toBe(40)
+    expect(matchDurationMinutes(DEFAULT_FORMAT_CONFIG.finals, 40, 90)).toBe(90)
+    expect(matchDurationMinutes({ games: 6, sets: 3, tieBreak: false, advantage: false }, 40, 90)).toBe(90)
+    expect(matchDurationMinutes({ games: 9, sets: 5, tieBreak: true, advantage: true }, 40, 90)).toBe(90)
+    expect(matchDurationMinutes({ games: 6, sets: 1, tieBreak: true, advantage: true }, 40, 90)).toBe(40)
   })
 })

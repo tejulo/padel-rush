@@ -2,6 +2,10 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import { categories, courts, matchSlots, matches, teamMembers, tournaments, type Match, type Tournament } from '@/lib/db/schema'
 import {
+  matchDurationMinutes,
+  parseFormatConfig,
+} from '@/lib/domain/format'
+import {
   scheduleReadyMatches,
   type ConditionalReset,
   type CourtReservation,
@@ -102,10 +106,9 @@ function indexSlots(slotRows: readonly SlotRow[], memberRows: readonly MemberRow
   return { teams, participants }
 }
 
-function fixedInterval(match: Match, shortMinutes: number, longMinutes: number): { startsAt: Date; endsAt: Date } | null {
+function fixedInterval(match: Match, minutes: number): { startsAt: Date; endsAt: Date } | null {
   const startsAt = match.actualStartAt ?? match.scheduledStartAt
   if (!startsAt) return null
-  const minutes = match.profile === 'finals' ? longMinutes : shortMinutes
   const fallbackEnd = new Date(startsAt.getTime() + minutes * MINUTE)
   if (match.actualStartAt && !match.actualEndAt) {
     const scheduledEnd = match.scheduledEndAt?.getTime() ?? 0
@@ -145,6 +148,9 @@ async function replanWith(database: SchedulingDatabase, tournamentId: string, fr
   if (!tournamentCourts.some((court) => court.enabled)) return
   if (!matchRows.some((match) => OPEN_STATES.includes(match.state))) return
   const { teams, participants } = indexSlots(slotRows, memberRows)
+  const formats = parseFormatConfig(tournament.formatConfig)
+  const minutesFor = (match: Match) =>
+    matchDurationMinutes(formats[match.profile], tournament.shortMatchMinutes, tournament.longMatchMinutes)
 
   const dependentCounts = distinctDependentCounts(slotRows)
   const readiness = readinessByMatch(matchRows, slotRows, from)
@@ -153,17 +159,22 @@ async function replanWith(database: SchedulingDatabase, tournamentId: string, fr
     .flatMap((match) => {
       const grandFinal = matchRows.find((row) => row.categoryId === match.categoryId && row.stage === 'grand-final')
       if (!grandFinal) return []
-      const fixed = FIXED_STATES.includes(grandFinal.state)
-        ? fixedInterval(grandFinal, tournament.shortMatchMinutes, tournament.longMatchMinutes)
-        : null
-      return [{ id: match.id, afterMatchId: grandFinal.id, ...(fixed ? { fixedInterval: fixed } : {}) }]
+      const fixed = FIXED_STATES.includes(grandFinal.state) ? fixedInterval(grandFinal, minutesFor(grandFinal)) : null
+      return [
+        {
+          id: match.id,
+          afterMatchId: grandFinal.id,
+          format: formats[match.profile],
+          ...(fixed ? { fixedInterval: fixed } : {}),
+        },
+      ]
     })
 
   const ready: SchedulingMatch[] = matchRows
     .filter((match) => OPEN_STATES.includes(match.state) && (teams.get(match.id) ?? []).length === 2)
     .map((match) => ({
       id: match.id,
-      profile: match.profile,
+      format: formats[match.profile],
       participantIds: participants.get(match.id) ?? [],
       readyAt: readiness.get(match.id) ?? from,
       dependentCount: dependentCounts.get(match.id) ?? 0,
@@ -172,7 +183,7 @@ async function replanWith(database: SchedulingDatabase, tournamentId: string, fr
   const courtReservations: CourtReservation[] = []
   const participantReservations: ParticipantReservation[] = []
   for (const match of matchRows.filter((row) => FIXED_STATES.includes(row.state))) {
-    const interval = fixedInterval(match, tournament.shortMatchMinutes, tournament.longMatchMinutes)
+    const interval = fixedInterval(match, minutesFor(match))
     if (!interval) continue
     if (match.courtId) courtReservations.push({ courtId: match.courtId, ...interval })
     for (const participantId of participants.get(match.id) ?? []) participantReservations.push({ participantId, ...interval })

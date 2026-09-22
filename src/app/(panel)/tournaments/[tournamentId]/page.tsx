@@ -4,7 +4,7 @@ import { requireUser } from '@/lib/auth/guards'
 import { PublicLink } from '@/components/panel/public-link'
 import { TournamentActions } from '@/components/panel/tournament-actions'
 import { TournamentForm } from '@/components/panel/tournament-form'
-import { formatLabel } from '@/lib/domain/format'
+import { formatLabel, parseFormatConfig } from '@/lib/domain/format'
 import { TournamentNav } from '@/components/panel/tournament-nav'
 import { assertTournamentOwner, getCategories, getTournament } from '@/lib/services/tournaments'
 import { categoryLabel, categoryStateLabel, tournamentStateLabel } from '@/lib/ui/labels'
@@ -20,6 +20,7 @@ export default async function TournamentPage({ params }: { params: Promise<{ tou
     notFound()
   }
   const tournamentCategories = await getCategories(tournament.id)
+  const formatConfig = parseFormatConfig(tournament.formatConfig)
 
   return (
     <section className="stack">
@@ -31,7 +32,7 @@ export default async function TournamentPage({ params }: { params: Promise<{ tou
         Estado: {tournamentStateLabel(tournament.state)}
       </p>
       <p className="meta">
-        Formato: {formatLabel(tournament.formatConfig.regular)} | Finales: {formatLabel(tournament.formatConfig.finals)}
+        Formato: {formatLabel(formatConfig.regular)} | Finales: {formatLabel(formatConfig.finals)}
       </p>
       <TournamentNav tournamentId={tournament.id} />
       <h2 className="section-title">Canchas</h2>

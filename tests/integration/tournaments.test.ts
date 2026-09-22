@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { and, eq, ne } from 'drizzle-orm'
+import { and, eq, ne, sql } from 'drizzle-orm'
 
 vi.mock('@/lib/auth/guards', () => ({ requireRole: vi.fn(), requireUser: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -13,7 +13,7 @@ import { categories, matches, participants, registrations, teamMembers, teams, t
 import { requireRole, requireUser } from '@/lib/auth/guards'
 import { cancelTournamentAction, createTournamentAction, deleteTournamentAction } from '@/app/actions/tournaments'
 import { createBrackets } from '@/lib/services/brackets'
-import { recordResult } from '@/lib/services/matches'
+import { listTournamentMatches, recordResult } from '@/lib/services/matches'
 import { getGlobalSettings, saveGlobalSettings } from '@/lib/services/settings'
 import {
   assertTournamentOwner,
@@ -420,5 +420,32 @@ describe('tournament management', () => {
 
     await expect(deleteTournamentAction({}, formData)).resolves.toEqual({ error: 'No tienes permisos para este torneo' })
     await expect(getTournament(tournament.id)).resolves.not.toBeNull()
+  })
+
+  it('inherits custom global defaults when creating a tournament', async () => {
+    await saveGlobalSettings({
+      endsAt: '19:00',
+      shortMatchMinutes: 30,
+      longMatchMinutes: 70,
+      restMinutes: 10,
+      courtCount: 2,
+      formatConfig: {
+        regular: { games: 6, sets: 1, tieBreak: false, advantage: false },
+        finals: { games: 6, sets: 5, tieBreak: true, advantage: true },
+      },
+    })
+
+    const tournament = await createTournament(makeTournamentInput({ name: 'Hereda defaults' }))
+
+    expect(tournament.courts.filter((court) => court.enabled)).toHaveLength(2)
+    expect(tournament.formatConfig.regular).toEqual({ games: 6, sets: 1, tieBreak: false, advantage: false })
+    expect(tournament.formatConfig.finals).toEqual({ games: 6, sets: 5, tieBreak: true, advantage: true })
+  })
+
+  it('rejects a corrupt stored format config when reading the match board', async () => {
+    const tournament = await createTournament(makeTournamentInput({ name: 'Config corrupta' }))
+    await db.execute(sql`update tournaments set format_config = '"corrupto"'::jsonb where id = ${tournament.id}`)
+
+    await expect(listTournamentMatches(tournament.id)).rejects.toThrow('El formato del torneo es invalido')
   })
 })

@@ -13,7 +13,7 @@ import {
   type Match,
   type Tournament,
 } from '@/lib/db/schema'
-import { defaultFormatConfig, type ProfileFormat } from '@/lib/domain/format'
+import { defaultFormatConfig, matchDurationMinutes, parseFormatConfig, type ProfileFormat } from '@/lib/domain/format'
 import { validateScore, type ScoreSet } from '@/lib/domain/scoring'
 import type { MatchSlot } from '@/lib/domain/types'
 import { lockTournamentForWrite, type TournamentTransaction } from '@/lib/services/tournaments'
@@ -160,6 +160,7 @@ export async function listTournamentMatches(tournamentId: string): Promise<Match
   )
   const endLimit = tournament ? tournamentInstant(tournament, tournament.endsAt) : null
 
+  const formats = tournament ? parseFormatConfig(tournament.formatConfig) : null
   const board = new Map<string, MatchBoardEntry>()
   for (const row of rows) {
     if (row.match.state === 'cancelled' && row.match.resultReason === 'conditional-reset') continue
@@ -179,7 +180,7 @@ export async function listTournamentMatches(tournamentId: string): Promise<Match
       awayTeam: null,
       scheduledStartLabel: startLabel,
       afterEndWarning: Boolean(endLimit && row.match.scheduledEndAt && row.match.scheduledEndAt.getTime() > endLimit.getTime()),
-      format: tournament ? tournament.formatConfig[row.match.profile] : defaultFormatConfig().regular,
+      format: formats ? formats[row.match.profile] : defaultFormatConfig().regular,
       replacementCandidates: candidatesByCategory.get(row.match.categoryId) ?? [],
     }
     const team: MatchBoardTeam | null =
@@ -238,7 +239,11 @@ export async function moveMatch(input: MoveMatchInput): Promise<Match> {
       .limit(1)
     if (!court?.enabled) throw new Error('La cancha no esta habilitada')
 
-    const minutes = match.profile === 'finals' ? tournament.longMatchMinutes : tournament.shortMatchMinutes
+    const minutes = matchDurationMinutes(
+      parseFormatConfig(tournament.formatConfig)[match.profile],
+      tournament.shortMatchMinutes,
+      tournament.longMatchMinutes,
+    )
     const endsAt = new Date(input.startsAt.getTime() + minutes * 60_000)
     const startLimit = tournamentInstant(tournament, tournament.startsAt)
     const endLimit = tournamentInstant(tournament, tournament.endsAt)
@@ -479,7 +484,8 @@ export async function recordResult(input: RecordResultInput): Promise<Match> {
     assertActiveTournament(context)
     assertPlayable(context.match)
     staleVersion(input.version, context.match.version)
-    const validation = validateScore(context.tournament.formatConfig[context.match.profile], input.sets)
+    const format = parseFormatConfig(context.tournament.formatConfig)[context.match.profile]
+    const validation = validateScore(format, input.sets)
     if (!validation.ok) throw new Error(validation.message)
     const slots = await lockedSlots(tx, input.matchId)
     const { winnerTeamId, loserTeamId, winningSlot } = winnerAndLoser(slots, validation.winner)
@@ -509,13 +515,14 @@ export async function recordForfeit(input: ForfeitInput): Promise<Match> {
       throw new Error('El equipo que pierde no pertenece al partido')
     }
     const winnerTeamId = input.forfeitTeamId === home.teamId ? away.teamId! : home.teamId!
+    const format = parseFormatConfig(context.tournament.formatConfig)[context.match.profile]
     const result = await finishMatch(
       tx,
       context,
       winnerTeamId,
       input.forfeitTeamId,
       input.forfeitTeamId === home.teamId ? 'b' : 'a',
-      forfeitScore(context.tournament.formatConfig[context.match.profile], home.teamId!, input.forfeitTeamId),
+      forfeitScore(format, home.teamId!, input.forfeitTeamId),
       input.reason,
     )
     await replanPendingMatches(context.tournament.id, new Date(), tx)

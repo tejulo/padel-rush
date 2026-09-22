@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/auth/guards'
 import type { SessionUser } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { categories, courts, tournaments, users, type Court, type Tournament } from '@/lib/db/schema'
-import { DEFAULT_FORMAT_CONFIG, parseFormatConfig, type FormatConfig } from '@/lib/domain/format'
+import { parseFormatConfig, type FormatConfig } from '@/lib/domain/format'
 import { replanPendingMatches } from '@/lib/services/scheduling'
 
 export const tournamentDefaults = {
@@ -13,7 +13,6 @@ export const tournamentDefaults = {
   longMatchMinutes: 90,
   restMinutes: 20,
   courtCount: 3,
-  formatConfig: DEFAULT_FORMAT_CONFIG,
 } as const
 
 export interface CreateTournamentInput {
