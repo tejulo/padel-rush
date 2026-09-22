@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/guards'
+import { formatConfigFrom } from '@/app/actions/format-form'
 import type { ActionState } from '@/app/actions/tournaments'
+import { defaultFormatConfig } from '@/lib/domain/format'
 import { createOrganizer, deactivateOrganizer, resetOrganizerPassword } from '@/lib/services/users'
 
 export type { ActionState } from '@/app/actions/tournaments'
@@ -65,6 +67,7 @@ export async function saveSettingsAction(_previousState: ActionState, formData: 
       longMatchMinutes: Number(value(formData, 'longMatchMinutes')),
       restMinutes: Number(value(formData, 'restMinutes')),
       courtCount: Number(value(formData, 'courtCount')),
+      formatConfig: formatConfigFrom(formData) ?? defaultFormatConfig(),
     })
   } catch (error) {
     return errorState(error)

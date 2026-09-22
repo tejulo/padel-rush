@@ -8,6 +8,8 @@ import {
   saveSettingsAction,
   type ActionState,
 } from '@/app/actions/organizers'
+import { ProfileFields } from '@/components/panel/tournament-form'
+import type { FormatConfig } from '@/lib/domain/format'
 
 const initialState: ActionState = {}
 
@@ -16,7 +18,14 @@ export function OrganizerAdmin({
   settings,
 }: {
   organizers: { id: string; username: string; state: string }[]
-  settings: { endsAt: string; shortMatchMinutes: number; longMatchMinutes: number; restMinutes: number; courtCount: number }
+  settings: {
+    endsAt: string
+    shortMatchMinutes: number
+    longMatchMinutes: number
+    restMinutes: number
+    courtCount: number
+    formatConfig: FormatConfig
+  }
 }) {
   const [createState, createAction, createPending] = useActionState(createOrganizerAction, initialState)
   const [resetState, resetAction, resetPending] = useActionState(resetPasswordAction, initialState)
@@ -108,6 +117,13 @@ export function OrganizerAdmin({
           Canchas habilitadas
           <input name="courtCount" type="number" min="1" max="6" defaultValue={settings.courtCount} required />
         </label>
+        <fieldset className="fieldset--flat">
+          <legend>Formato de partidos</legend>
+          <div className="card-grid">
+            <ProfileFields profile="regular" label="Regulares" format={settings.formatConfig.regular} locked={false} />
+            <ProfileFields profile="finals" label="Finales" format={settings.formatConfig.finals} locked={false} />
+          </div>
+        </fieldset>
         <button type="submit" disabled={settingsPending}>
           {settingsPending ? 'Guardando...' : 'Guardar ajustes'}
         </button>

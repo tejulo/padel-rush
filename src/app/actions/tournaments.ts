@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/guards'
+import { formatConfigFrom } from '@/app/actions/format-form'
 import {
   assertTournamentOwner,
   cancelTournament,
@@ -51,6 +52,7 @@ function tournamentInput(formData: FormData, organizerId: string): CreateTournam
     restMinutes: numberValue(formData, 'restMinutes'),
     organizerId,
     courtCount: courtCountValue(formData),
+    formatConfig: formatConfigFrom(formData),
   }
 }
 
@@ -85,6 +87,7 @@ function updateInput(formData: FormData): UpdateTournamentInput {
     longMatchMinutes: formData.has('longMatchMinutes') ? numberValue(formData, 'longMatchMinutes') : undefined,
     restMinutes: formData.has('restMinutes') ? numberValue(formData, 'restMinutes') : undefined,
     courtCount: courtCountValue(formData),
+    formatConfig: formatConfigFrom(formData),
   }
 }
 

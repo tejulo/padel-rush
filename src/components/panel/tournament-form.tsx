@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import type { ActiveOrganizer, TournamentWithCourts } from '@/lib/services/tournaments'
+import { DEFAULT_FORMAT_CONFIG, formatExample, type FormatConfig, type ProfileFormat } from '@/lib/domain/format'
 import { createTournamentAction, updateTournamentAction, type ActionState } from '@/app/actions/tournaments'
 
 const initialState: ActionState = {}
@@ -12,6 +13,7 @@ export interface TournamentDefaultValues {
   longMatchMinutes: number
   restMinutes: number
   courtCount: number
+  formatConfig: FormatConfig
 }
 
 export function TournamentForm({
@@ -114,11 +116,104 @@ export function TournamentForm({
           defaultValue={tournament?.courts.filter((court) => court.enabled).length ?? defaults?.courtCount ?? 3}
         />
       </label>
+      <fieldset className="fieldset--flat">
+        <legend>Formato de partidos</legend>
+        <div className="card-grid">
+          <ProfileFields
+            profile="regular"
+            label="Regulares"
+            format={tournament?.formatConfig.regular ?? defaults?.formatConfig.regular ?? DEFAULT_FORMAT_CONFIG.regular}
+            locked={locked}
+          />
+          <ProfileFields
+            profile="finals"
+            label="Finales"
+            format={tournament?.formatConfig.finals ?? defaults?.formatConfig.finals ?? DEFAULT_FORMAT_CONFIG.finals}
+            locked={locked}
+          />
+        </div>
+      </fieldset>
       {state.error ? <p role="alert">{state.error}</p> : null}
       {state.success ? <p role="status">{state.success}</p> : null}
       <button type="submit" disabled={pending}>
         {pending ? 'Guardando...' : tournament ? 'Guardar cambios' : 'Crear torneo'}
       </button>
     </form>
+  )
+}
+
+export function ProfileFields({
+  profile,
+  label,
+  format,
+  locked,
+}: {
+  profile: 'regular' | 'finals'
+  label: string
+  format: ProfileFormat
+  locked: boolean
+}) {
+  const [games, setGames] = useState(format.games)
+  const [sets, setSets] = useState(format.sets)
+  const [tieBreak, setTieBreak] = useState(format.tieBreak)
+  const [advantage, setAdvantage] = useState(format.advantage)
+  const example = formatExample({ games, sets, tieBreak, advantage })
+
+  return (
+    <fieldset className="fieldset--flat">
+      <legend>{label}</legend>
+      <div className="field-row">
+        <label>
+          Juegos por set
+          <input
+            name={`${profile}Games`}
+            type="number"
+            min="4"
+            max="9"
+            required
+            value={games}
+            disabled={locked}
+            onChange={(event) => setGames(Number(event.target.value))}
+          />
+        </label>
+        <label>
+          Al mejor de
+          <select name={`${profile}Sets`} value={sets} disabled={locked} onChange={(event) => setSets(Number(event.target.value))}>
+            <option value={1}>1 set</option>
+            <option value={3}>3 sets</option>
+            <option value={5}>5 sets</option>
+          </select>
+        </label>
+      </div>
+      <label>
+        <input
+          type="checkbox"
+          name={`${profile}TieBreak`}
+          checked={tieBreak}
+          disabled={locked}
+          onChange={(event) => setTieBreak(event.target.checked)}
+        />
+        Tie-break
+      </label>
+      {tieBreak ? (
+        <label>
+          Cierre del set
+          <select
+            name={`${profile}Advantage`}
+            value={advantage ? 'con-ventaja' : 'sin-ventaja'}
+            disabled={locked}
+            onChange={(event) => setAdvantage(event.target.value === 'con-ventaja')}
+          >
+            <option value="sin-ventaja">
+              Tie-break en {games - 1}-{games - 1} (sin ventaja)
+            </option>
+            <option value="con-ventaja">
+              Tie-break en {games}-{games} (con ventaja: {games + 1}-{games - 1} o {games + 1}-{games})
+            </option>
+          </select>
+        </label>
+      ) : null}
+      <p className="meta">Ejemplo: {example}</p>
+    </fieldset>
   )
 }

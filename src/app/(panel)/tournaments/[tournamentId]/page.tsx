@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/guards'
 import { PublicLink } from '@/components/panel/public-link'
 import { TournamentActions } from '@/components/panel/tournament-actions'
 import { TournamentForm } from '@/components/panel/tournament-form'
+import { formatLabel } from '@/lib/domain/format'
 import { assertTournamentOwner, getCategories, getTournament } from '@/lib/services/tournaments'
 
 export default async function TournamentPage({ params }: { params: Promise<{ tournamentId: string }> }) {
@@ -25,6 +26,9 @@ export default async function TournamentPage({ params }: { params: Promise<{ tou
       </p>
       <h1>{tournament.name}</h1>
       <p>Estado: {tournament.state}</p>
+      <p className="meta">
+        Formato: {formatLabel(tournament.formatConfig.regular)} | Finales: {formatLabel(tournament.formatConfig.finals)}
+      </p>
       <p>
         <Link href={`/tournaments/${tournament.id}/participants`}>Participantes</Link>
       </p>

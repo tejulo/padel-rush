@@ -213,6 +213,28 @@ describe('tournament management', () => {
     expect(created[0]?.organizerId).toBe('organizer-id')
   })
 
+  it('parses the format fields from the tournament form', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ id: 'organizer-id', username: 'organizador1', role: 'organizer' })
+    const formData = new FormData()
+    formData.set('name', 'Formateado')
+    formData.set('date', '2026-10-03')
+    formData.set('timezone', 'America/Argentina/Buenos_Aires')
+    formData.set('startsAt', '09:00')
+    formData.set('endsAt', '21:00')
+    formData.set('courtCount', '3')
+    formData.set('regularGames', '6')
+    formData.set('regularSets', '1')
+    formData.set('finalsGames', '6')
+    formData.set('finalsSets', '3')
+    formData.set('finalsTieBreak', 'on')
+    formData.set('finalsAdvantage', 'con-ventaja')
+
+    await createTournamentAction({}, formData)
+    const [created] = await db.select().from(tournaments).where(eq(tournaments.name, 'Formateado'))
+    expect(created!.formatConfig.regular).toEqual({ games: 6, sets: 1, tieBreak: false, advantage: false })
+    expect(created!.formatConfig.finals).toEqual({ games: 6, sets: 3, tieBreak: true, advantage: true })
+  })
+
   it('rejects an invalid timezone at create and update time', async () => {
     await expect(createTournament(makeTournamentInput({ timezone: 'Mars/Olympus' }))).rejects.toThrow(
       'La zona horaria no es valida',
