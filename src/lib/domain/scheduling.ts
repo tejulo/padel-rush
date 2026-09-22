@@ -1,6 +1,8 @@
 import type { ProfileFormat } from '@/lib/domain/format'
 import { matchDurationMinutes } from '@/lib/domain/format'
 
+export const DEFAULT_TIMEZONE = 'America/Asuncion'
+
 export interface SchedulingMatch {
   id: string
   format: ProfileFormat

@@ -261,7 +261,7 @@ describe('scheduling service', () => {
       ['men', '2026-10-04T10:40:00.000Z'],
     ] as const) {
       for (const row of await roundOne(category)) {
-        await recordResult({ matchId: row.id, version: row.version, sets: [{ home: 9, away: 7 }] })
+        await recordResult({ matchId: row.id, version: row.version, sets: [{ home: 6, away: 4 }] })
         await db.update(matches).set({ actualEndAt: new Date(end) }).where(eq(matches.id, row.id))
       }
     }

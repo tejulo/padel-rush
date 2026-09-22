@@ -19,7 +19,7 @@ export const MAX_GAMES = 9
 export const SET_OPTIONS = [1, 3, 5] as const
 
 export const DEFAULT_FORMAT_CONFIG: FormatConfig = {
-  regular: { games: 9, sets: 1, tieBreak: true, advantage: false },
+  regular: { games: 6, sets: 1, tieBreak: true, advantage: false },
   finals: { games: 6, sets: 3, tieBreak: true, advantage: true },
 }
 

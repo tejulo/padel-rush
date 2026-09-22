@@ -10,9 +10,9 @@ import {
 } from '@/lib/domain/format'
 
 describe('format config', () => {
-  it('reproduces the current rules as defaults', () => {
+  it('exposes the product defaults', () => {
     expect(DEFAULT_FORMAT_CONFIG).toEqual({
-      regular: { games: 9, sets: 1, tieBreak: true, advantage: false },
+      regular: { games: 6, sets: 1, tieBreak: true, advantage: false },
       finals: { games: 6, sets: 3, tieBreak: true, advantage: true },
     })
     expect(defaultFormatConfig()).toEqual(DEFAULT_FORMAT_CONFIG)
@@ -38,10 +38,10 @@ describe('format config', () => {
   })
 
   it('labels and examples derive from the config', () => {
-    expect(formatLabel(DEFAULT_FORMAT_CONFIG.regular)).toBe('Un set a 9 juegos, tie-break en 8-8')
+    expect(formatLabel(DEFAULT_FORMAT_CONFIG.regular)).toBe('Un set a 6 juegos, tie-break en 5-5')
     expect(formatLabel(DEFAULT_FORMAT_CONFIG.finals)).toBe('Al mejor de 3 sets a 6 juegos, con ventaja y tie-break en 6-6')
     expect(formatLabel({ games: 6, sets: 1, tieBreak: false, advantage: false })).toBe('Un set a 6 juegos, cierre directo')
-    expect(formatExample(DEFAULT_FORMAT_CONFIG.regular)).toBe('9-7 o 9-8')
+    expect(formatExample(DEFAULT_FORMAT_CONFIG.regular)).toBe('6-4 o 6-5')
     expect(formatExample(DEFAULT_FORMAT_CONFIG.finals)).toBe('6-4, 7-5 o 7-6')
   })
 

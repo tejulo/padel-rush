@@ -47,7 +47,7 @@ La aplicacion queda en `http://localhost:3000`. El administrador inicial se crea
 
 ## Flujo de operacion
 
-1. El organizador crea el torneo, habilita dos o tres canchas y registra participantes con nivel 1 a 5.
+1. El organizador crea el torneo, habilita entre una y seis canchas y registra participantes con nivel 1 a 5.
 2. La aplicacion propone parejas equilibradas; el organizador las ajusta y confirma.
 3. Al iniciar el torneo se generan los cuadros de doble eliminacion y el enlace publico.
 4. El tablero de partidos permite iniciar, cargar marcador, registrar ausencia o retiro, mover horarios y corregir resultados en orden inverso.
@@ -55,8 +55,9 @@ La aplicacion queda en `http://localhost:3000`. El administrador inicial se crea
 
 ## Reglas deportivas
 
-- Partidos previos a las finales: un set a nueve juegos con punto de oro y tie-break en 8-8.
+- Partidos previos a las finales: un set a seis juegos con punto de oro y tie-break en 5-5.
 - Final de ganadores, final de perdedores, gran final y su reinicio: mejor de tres sets con tie-break en 6-6 y punto de oro.
+- Cada torneo puede parametrizar ambos formatos (juegos por set, sets, tie-break y ventaja) y la cantidad de canchas (1 a 6); la zona horaria por defecto es `America/Asuncion`.
 - Doble eliminacion: la segunda derrota elimina; si la pareja del cuadro de perdedores gana la gran final, se juega un reinicio.
 - Una persona puede competir en su categoria propia y en mixto, nunca en dos parejas de la misma categoria.
 

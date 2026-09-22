@@ -5,6 +5,7 @@ import type { SessionUser } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { categories, courts, tournaments, users, type Court, type Tournament } from '@/lib/db/schema'
 import { parseFormatConfig, type FormatConfig } from '@/lib/domain/format'
+import { DEFAULT_TIMEZONE } from '@/lib/domain/scheduling'
 import { replanPendingMatches } from '@/lib/services/scheduling'
 
 export const tournamentDefaults = {
@@ -122,7 +123,7 @@ function assertUpdateInput(input: UpdateTournamentInput): void {
   assertTournamentInput({
     name: input.name ?? 'Torneo',
     date: input.date ?? '2000-01-01',
-    timezone: input.timezone ?? 'UTC',
+    timezone: input.timezone ?? DEFAULT_TIMEZONE,
     startsAt: input.startsAt ?? '00:00',
     endsAt: input.endsAt,
     shortMatchMinutes: input.shortMatchMinutes,

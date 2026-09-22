@@ -10,6 +10,7 @@ import {
   type FormatConfig,
   type ProfileFormat,
 } from '@/lib/domain/format'
+import { DEFAULT_TIMEZONE } from '@/lib/domain/scheduling'
 import { createTournamentAction, updateTournamentAction, type ActionState } from '@/app/actions/tournaments'
 
 const initialState: ActionState = {}
@@ -69,7 +70,7 @@ export function TournamentForm({
       </label>
       <label>
         Zona horaria
-        <input name="timezone" required defaultValue={tournament?.timezone ?? 'America/Argentina/Buenos_Aires'} disabled={locked} />
+        <input name="timezone" required defaultValue={tournament?.timezone ?? DEFAULT_TIMEZONE} disabled={locked} />
       </label>
       <label>
         Hora de inicio

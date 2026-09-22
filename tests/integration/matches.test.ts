@@ -152,7 +152,7 @@ describe('match operations', () => {
     await schedule(row.id)
     const sets =
       row.profile === 'regular'
-        ? [{ home: winner === 'home' ? 9 : 7, away: winner === 'home' ? 7 : 9 }]
+        ? [{ home: winner === 'home' ? 6 : 4, away: winner === 'home' ? 4 : 6 }]
         : winner === 'home'
           ? [{ home: 6, away: 4 }, { home: 6, away: 4 }]
           : [{ home: 4, away: 6 }, { home: 4, away: 6 }]
@@ -317,7 +317,7 @@ describe('match operations', () => {
       .set({ state: 'pending', courtId: null, scheduledStartAt: null, scheduledEndAt: null })
       .where(and(eq(matches.categoryId, categoryId), eq(matches.stage, 'winners-final')))
     const first = await match('winners-final')
-    await expect(recordResult({ matchId: first.id, version: first.version, sets: [{ home: 9, away: 7 }] })).rejects.toThrow('programado')
+    await expect(recordResult({ matchId: first.id, version: first.version, sets: [{ home: 6, away: 4 }] })).rejects.toThrow('programado')
     await schedule(first.id)
     await expect(recordResult({ matchId: first.id, version: first.version - 1, sets: [{ home: 6, away: 4 }, { home: 6, away: 4 }] })).rejects.toThrow(
       'Datos desactualizados',
@@ -351,8 +351,8 @@ describe('match operations', () => {
     const second = await match('winners-round', 1, 2)
     await schedule(first.id)
     await schedule(second.id)
-    await recordResult({ matchId: first.id, version: first.version, sets: [{ home: 9, away: 7 }] })
-    await recordResult({ matchId: second.id, version: second.version, sets: [{ home: 9, away: 7 }] })
+    await recordResult({ matchId: first.id, version: first.version, sets: [{ home: 6, away: 4 }] })
+    await recordResult({ matchId: second.id, version: second.version, sets: [{ home: 6, away: 4 }] })
     const dependent = await match('winners-final', 2, 1)
     await schedule(dependent.id)
     await recordResult({ matchId: dependent.id, version: dependent.version, sets: [{ home: 6, away: 4 }, { home: 6, away: 4 }] })
@@ -371,17 +371,17 @@ describe('match operations', () => {
       reason: 'absence',
     })
     expect(shortForfeit).toMatchObject({ state: 'forfeit', resultReason: 'absence', winnerTeamId: teamIds[0], loserTeamId: teamIds[1] })
-    expect(shortForfeit.score).toEqual([{ home: 9, away: 0 }])
+    expect(shortForfeit.score).toEqual([{ home: 6, away: 0 }])
 
     const second = await match('winners-round', 1, 2)
     await schedule(second.id)
-    await recordResult({ matchId: second.id, version: second.version, sets: [{ home: 9, away: 7 }] })
+    await recordResult({ matchId: second.id, version: second.version, sets: [{ home: 6, away: 4 }] })
     const winnersFinal = await match('winners-final', 2, 1)
     await schedule(winnersFinal.id)
     await recordResult({ matchId: winnersFinal.id, version: winnersFinal.version, sets: [{ home: 6, away: 4 }, { home: 6, away: 4 }] })
     const losersRound = await match('losers-round', 1, 1)
     await schedule(losersRound.id)
-    await recordResult({ matchId: losersRound.id, version: losersRound.version, sets: [{ home: 9, away: 7 }] })
+    await recordResult({ matchId: losersRound.id, version: losersRound.version, sets: [{ home: 6, away: 4 }] })
     const losersFinal = await match('losers-final', 2, 1)
     await schedule(losersFinal.id)
     await recordResult({ matchId: losersFinal.id, version: losersFinal.version, sets: [{ home: 6, away: 4 }, { home: 6, away: 4 }] })
@@ -483,7 +483,7 @@ describe('match operations', () => {
     const formData = new FormData()
     formData.set('matchId', first.id)
     formData.set('version', String(first.version))
-    formData.set('sets', JSON.stringify([{ home: 9, away: 7 }]))
+    formData.set('sets', JSON.stringify([{ home: 6, away: 4 }]))
 
     await expect(recordResultAction({}, formData)).resolves.toEqual({ error: 'No tienes permisos para este torneo' })
   })
@@ -496,7 +496,7 @@ describe('match operations', () => {
     const formData = new FormData()
     formData.set('matchId', first.id)
     formData.set('version', String(first.version))
-    formData.set('sets', JSON.stringify([{ home: 9, away: 8 }]))
+    formData.set('sets', JSON.stringify([{ home: 6, away: 5 }]))
 
     await expect(recordResultAction({}, formData)).resolves.toEqual({ success: 'Resultado guardado' })
 
@@ -505,7 +505,7 @@ describe('match operations', () => {
     const invalid = new FormData()
     invalid.set('matchId', second.id)
     invalid.set('version', String(second.version))
-    invalid.set('sets', JSON.stringify([{ home: 8, away: 7 }]))
+    invalid.set('sets', JSON.stringify([{ home: 5, away: 4 }]))
     await expect(recordResultAction({}, invalid)).resolves.toEqual({ error: 'El marcador no es valido' })
   })
 
